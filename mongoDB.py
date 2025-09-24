@@ -6,7 +6,7 @@ class MongoDB:
     _instance = None
 
     # Replace the uri string with your MongoDB deployment's connection string.
-    uri = "mongodb+srv://Calvin:ece461l@ece461l.38dktsx.mongodb.net/?retryWrites=true&w=majority&appName=ECE461L"
+    uri = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/?retryWrites=true&w=majority&appName=ECE461L"
 
     def __new__(cls, *args, **kwargs):
         # Implementing Singleton pattern
@@ -50,10 +50,20 @@ class MongoDB:
     def sign_in(self, username, password):
         users_collection = self.db.user_info
         user = users_collection.find_one({"username": username, "password": password})
-        
+
         if user:
             print("Sign-in successful.")
             return True
         else:
             print("Invalid username or password.")
             return False
+        
+
+    ''' TODO - Implement other database operations as needed '''
+
+
+if __name__ == "__main__":
+    mongo_db = MongoDB()
+    # Example usage:
+    mongo_db.new_user("testuser", "testpassword")
+    mongo_db.sign_in("testuser", "testpassword")
