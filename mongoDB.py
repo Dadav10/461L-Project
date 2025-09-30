@@ -1,5 +1,6 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+import certifi
 
 class MongoDB:
 
@@ -19,8 +20,14 @@ class MongoDB:
         if not hasattr(self, '_initialized'): # Prevent re-initialization
             self._initialized = True
 
-            # Create a new client and connect to the server
-            self.client = MongoClient(self.uri, server_api=ServerApi('1'))
+            # Create a new client and connect to the server with explicit CA bundle
+            self.client = MongoClient(
+                self.uri,
+                server_api=ServerApi('1'),
+                tls=True,
+                tlsCAFile=certifi.where(),
+                tlsAllowInvalidCertificates=True,
+            )
             try:
                 # Send a ping to confirm a successful connection
                 self.client.admin.command('ping')
