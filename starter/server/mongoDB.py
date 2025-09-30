@@ -4,7 +4,7 @@ import certifi
 
 class MongoDB:
 
-    _instance = None
+    _instances = {}  # Dictionary to store instances by class
     _db_instance = None
     _client_instance = None
 
@@ -12,10 +12,11 @@ class MongoDB:
     uri = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/?retryWrites=true&w=majority&appName=ECE461L"
 
     def __new__(cls, *args, **kwargs):
-        # Implementing Singleton pattern - use MongoDB._instance for all child classes
-        if not MongoDB._instance:
-            MongoDB._instance = super().__new__(cls)
-        return MongoDB._instance
+        # Implementing Singleton pattern per class - each subclass gets its own instance
+        # but they all share the same database connection
+        if cls not in MongoDB._instances:
+            MongoDB._instances[cls] = super().__new__(cls)
+        return MongoDB._instances[cls]
 
     def __init__(self):
         # This __init__ method will only run once due to the Singleton pattern
