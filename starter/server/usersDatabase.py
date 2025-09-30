@@ -1,7 +1,5 @@
 # Import necessary libraries and modules
-from pymongo import MongoClient
-
-import projectsDB
+from mongoDB import MongoDB
 
 '''
 Structure of User entry:
@@ -13,28 +11,75 @@ User = {
 }
 '''
 
-# Function to add a new user
-def addUser(client, username, userId, password):
-    # Add a new user to the database
-    pass
+class UsersDatabase(MongoDB):
+    def __init__(self):
+        super().__init__()
 
-# Helper function to query a user by username and userId
-def __queryUser(client, username, userId):
-    # Query and return a user from the database
-    pass
+    def addUser(self, username, userId, password):
+        """Add a new user to the database"""
+        users_collection = self.db.user_info
+        user_data = {
+            "username": username,
+            "userId": userId,
+            "password": password,
+            "projects": []
+        }
 
-# Function to log in a user
-def login(client, username, userId, password):
-    # Authenticate a user and return login status
-    pass
+        # Check if the username or userId already exists
+        if users_collection.find_one({"$or": [{"username": username}, {"userId": userId}]}):
+            print("Username or User ID already exists.")
+            return False
+        else:
+            users_collection.insert_one(user_data)
+            print("User added successfully.")
+            return True
 
-# Function to add a user to a project
-def joinProject(client, userId, projectId):
-    # Add a user to a specified project
-    pass
+    def __queryUser(self, username, userId):
+        """Helper function to query a user by username and userId"""
+        users_collection = self.db.user_info
+        user = users_collection.find_one({"username": username, "userId": userId})
+        return user
 
-# Function to get the list of projects for a user
-def getUserProjectsList(client, userId):
-    # Get and return the list of projects a user is part of
-    pass
+    def login(self, username, userId, password):
+        """Authenticate a user and return login status"""
+        users_collection = self.db.user_info
+        user = users_collection.find_one({"username": username, "userId": userId, "password": password})
+
+        if user:
+            print("Login successful.")
+            return True
+        else:
+            print("Invalid credentials.")
+            return False
+
+    def joinProject(self, userId, projectId):
+        """Add a user to a specified project"""
+        users_collection = self.db.user_info
+        user = users_collection.find_one({"userId": userId})
+        
+        if not user:
+            print("User not found.")
+            return False
+            
+        if projectId in user.get("projects", []):
+            print("User already in project.")
+            return False
+            
+        users_collection.update_one(
+            {"userId": userId},
+            {"$push": {"projects": projectId}}
+        )
+        print("User added to project successfully.")
+        return True
+
+    def getUserProjectsList(self, userId):
+        """Get and return the list of projects a user is part of"""
+        users_collection = self.db.user_info
+        user = users_collection.find_one({"userId": userId})
+        
+        if user:
+            return user.get("projects", [])
+        else:
+            print("User not found.")
+            return []
 
