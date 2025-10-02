@@ -1,15 +1,15 @@
 # Import necessary libraries and modules
 from bson.objectid import ObjectId
 from flask import Flask, request, jsonify
-from pymongo import MongoClient
 
-# Import custom modules for database interactions
-import usersDB
-import projectsDB
-import hardwareDB
+# Import database modules
+from mongoDB import MongoDB
+from usersDatabase import UsersDatabase
+from hardwareDatabase import HardwareDatabase
+from projectsDatabase import ProjectsDatabase
 
 # Define the MongoDB connection string
-MONGODB_SERVER = "your_mongodb_connection_string_here"
+MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/?retryWrites=true&w=majority&appName=ECE461L"
 
 # Initialize a new Flask web application
 app = Flask(__name__)
@@ -18,15 +18,20 @@ app = Flask(__name__)
 @app.route('/login', methods=['POST'])
 def login():
     # Extract data from request
+    data = request.json
+    userid = data.get('userid')
+    username = data.get('username')
+    password = data.get('password')
 
-    # Connect to MongoDB
+    # Connect to MongoDB and attempt to log in using the usersDB module
+    users_db = UsersDatabase()
+    login_success = users_db.login(userid, username, password)
+    if login_success:
+        return jsonify({"message": "Login successful"}), 200
+    else:
+        return jsonify({"message": "Invalid credentials"}), 401
 
-    # Attempt to log in the user using the usersDB module
 
-    # Close the MongoDB connection
-
-    # Return a JSON response
-    return jsonify({})
 
 # Route for the main page (Work in progress)
 @app.route('/main')
@@ -60,15 +65,18 @@ def join_project():
 @app.route('/add_user', methods=['POST'])
 def add_user():
     # Extract data from request
+    data = request.json
+    userid = data.get('userid')
+    username = data.get('username')
+    password = data.get('password')
 
-    # Connect to MongoDB
-
-    # Attempt to add the user using the usersDB module
-
-    # Close the MongoDB connection
-
-    # Return a JSON response
-    return jsonify({})
+    # Connect to MongoDB and attempt to add the user using the usersDB module
+    users_db = UsersDatabase()
+    user_added = users_db.addUser(userid, username, password)
+    if user_added:
+        return jsonify({"message": "User added successfully"}), 201
+    else:
+        return jsonify({"message": "User already exists"}), 409
 
 # Route for getting the list of user projects
 @app.route('/get_user_projects_list', methods=['POST'])
