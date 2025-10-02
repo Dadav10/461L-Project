@@ -1,0 +1,22 @@
+.app-root{max-width:900px;margin:24px auto;padding:12px}
+.app-header{display:flex;align-items:center;justify-content:space-between}
+.app-header nav a{margin-right:12px}
+.app-header nav button{margin-left:8px}
+.card{background:rgb(204,85, 0);padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;font-weight:600;margin-bottom:6px}
+.form-row input, .form-row textarea, select{
+	width:100%;
+	padding:8px;
+	border:1px solid #ddd;
+	border-radius:4px;
+	box-sizing:border-box;
+}
+
+/* Input size helpers - attach these via className on inputs */
+.input-small{max-width:200px;height:34px}
+.input-medium{max-width:420px;height:40px}
+.input-large{max-width:640px;height:48px}
+
+.project-list{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.project-item{padding:12px;border:1px solid #eee;border-radius:6px}
