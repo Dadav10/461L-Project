@@ -20,11 +20,12 @@ def login():
     # Extract data from request
     data = request.json
     userid = data.get('userid')
+    username = data.get('username')
     password = data.get('password')
 
     # Connect to MongoDB and attempt to log in using the usersDB module
     users_db = UsersDatabase()
-    login_success = users_db.login(userid, password)
+    login_success = users_db.login(userid, username, password)
     if login_success:
         return jsonify({"message": "Login successful"}), 200
     else:
@@ -66,11 +67,12 @@ def add_user():
     # Extract data from request
     data = request.json
     userid = data.get('userid')
+    username = data.get('username')
     password = data.get('password')
 
     # Connect to MongoDB and attempt to add the user using the usersDB module
     users_db = UsersDatabase()
-    user_added = users_db.addUser(userid, password)
+    user_added = users_db.addUser(userid, username, password)
     if user_added:
         return jsonify({"message": "User added successfully"}), 201
     else:
