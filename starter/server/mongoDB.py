@@ -49,9 +49,9 @@ class MongoDB:
         """Return the database for child classes to use"""
         return self.db
 
-    # # Close the MongoDB connection
-    # def close(self):
-    #     self.client.close()
+    # Close the MongoDB connection when the user logs out
+    def close(self):
+        self.client.close()
 
     # Base functionality can be accessed by child classes
     # Specific database operations are now handled by specialized child classes
