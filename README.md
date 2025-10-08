@@ -23,7 +23,7 @@ Follow these simple steps to set up and run the project:
    To create the virtual environment and install Python dependencies, run the setup script. If you want the virtual environment to be activated in your current shell session, you must source the script (sourcing lets a script modify your shell environment):
 
    ```bash
-   source ./startup.sh
+   source startup.sh
    ```
 
    This script will:
