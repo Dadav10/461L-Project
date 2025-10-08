@@ -8,8 +8,12 @@ export default function Project({project, onJoin}){
       <p>{project.description}</p>
       <small>ID: {project.id}</small>
       <div style={{marginTop:8}}>
-        <button onClick={() => onJoin && onJoin(project.id)}>Join Project</button>
-        <Link to={`/project/${project.id}`} style={{marginLeft:8}}>View</Link>
+        <button onClick={() => onJoin && onJoin(project.id)} className="btn btn-primary" style={{padding:'8px 16px'}}>
+          Join Project
+        </button>
+        <Link to={`/project/${project.id}`} className="btn btn-secondary" style={{marginLeft:8, padding:'8px 16px'}}>
+          View
+        </Link>
       </div>
     </div>
   )
