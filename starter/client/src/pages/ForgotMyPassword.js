@@ -20,11 +20,17 @@ export default function ForgotMyPassword(){
           <label>Username</label>
           <input value={username} onChange={e=>setUsername(e.target.value)} />
         </div>
-        <div style={{marginTop:8}}>
-          <button type="submit">Lookup</button>
+        <div style={{marginTop:20, textAlign:'center'}}>
+          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
+            Lookup Password
+          </button>
         </div>
       </form>
-      {message && <div style={{marginTop:12}}>{message}</div>}
+      {message && (
+        <div className={message.includes('not found') ? 'error-message' : 'success-message'} style={{marginTop:20}}>
+          {message}
+        </div>
+      )}
     </div>
   )
 }
