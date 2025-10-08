@@ -57,8 +57,10 @@ export default function MyUserPortal(){
             <label>Description</label>
             <input value={desc} onChange={e=>setDesc(e.target.value)} />
           </div>
-          <div>
-            <button type="submit">Create</button>
+          <div style={{marginTop:12}}>
+            <button type="submit" className="btn btn-primary" style={{padding:'12px 20px'}}>
+              Create
+            </button>
           </div>
         </form>
       </section>
