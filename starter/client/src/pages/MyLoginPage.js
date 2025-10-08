@@ -35,13 +35,15 @@ export default function MyLoginPage(){
           <label>Password</label>
           <input className="input-medium" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         </div>
-        {error && <div style={{color:'black'}}>{error}</div>}
-        <div style={{marginTop:12}}>
-          <button type="submit">Login</button>
+        {error && <div className="error-message">{error}</div>}
+        <div style={{marginTop:20, textAlign:'center'}}>
+          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
+            Sign In
+          </button>
         </div>
       </form>
-      <div style={{marginTop:12}}>
-        <Link to="/forgot">Forgot password?</Link>
+      <div style={{marginTop:20, textAlign:'center'}}>
+        <Link to="/forgot" className="btn-link">Forgot password?</Link>
       </div>
     </div>
   )

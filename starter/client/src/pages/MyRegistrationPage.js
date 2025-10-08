@@ -33,9 +33,11 @@ export default function MyRegistrationPage(){
           <label>Password</label>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         </div>
-        {error && <div style={{color:'black'}}>{error}</div>}
-        <div style={{marginTop:12}}>
-          <button type="submit">Create account</button>
+        {error && <div className="error-message">{error}</div>}
+        <div style={{marginTop:20, textAlign:'center'}}>
+          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
+            Create Account
+          </button>
         </div>
       </form>
     </div>
