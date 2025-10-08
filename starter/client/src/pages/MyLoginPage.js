@@ -1,15 +1,9 @@
 import React, {useState} from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
-
-async function apiLogin(username, password){
-  const res = await fetch(`${API_BASE}/api/login`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({username,password})
-  });
-  return res.json().then(j=>({status: res.status, body: j}));
+function findUser(username, password){
+  const users = JSON.parse(localStorage.getItem('users')||'[]');
+  return users.find(u=>u.username===username && u.password===password);
 }
 
 export default function MyLoginPage(){
@@ -20,16 +14,13 @@ export default function MyLoginPage(){
 
   const submit = (e)=>{
     e.preventDefault();
-    apiLogin(username,password).then(r=>{
-      if(r.status===200 && r.body.user){
-        localStorage.setItem('currentUser', JSON.stringify(r.body.user));
-        navigate('/portal');
-      } else {
-        setError(r.body.message || 'Invalid credentials');
-      }
-    }).catch(e=>{
-      setError('Server error');
-    });
+    const user = findUser(username,password);
+    if(user){
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      navigate('/portal');
+    } else {
+      setError('Invalid credentials');
+    }
   };
 
   return (
