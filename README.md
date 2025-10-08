@@ -19,10 +19,13 @@ Follow these simple steps to set up and run the project:
    ```
 
 2. **Run the setup script**:
+
+   To create the virtual environment and install Python dependencies, run the setup script. If you want the virtual environment to be activated in your current shell session, you must source the script (sourcing lets a script modify your shell environment):
+
    ```bash
-   ./startup.sh
+   source ./startup.sh
    ```
-   
+
    This script will:
    - Create or activate a Python virtual environment
    - Install all required Python dependencies from `requirements.txt`
@@ -145,3 +148,20 @@ projects_db.checkOutHW("proj001", "Arduino Uno", 5, "user001")
 - If MongoDB connection fails, check your internet connection and MongoDB Atlas credentials
 - For React frontend issues, ensure Node.js and npm are properly installed
 - If inheritance tests fail, verify all database files are in the `starter/server/` directory
+
+- Activation note: to have the virtual environment activated in your interactive shell, source the script rather than executing it:
+
+```bash
+source ./startup.sh
+# or
+. ./startup.sh
+```
+
+On Windows using PowerShell, activate the virtual environment with:
+
+```powershell
+# from the repository root (PowerShell)
+.\.env\Scripts\Activate.ps1
+```
+
+If you're using Git Bash or WSL on Windows, the `source` commands above will work there.
