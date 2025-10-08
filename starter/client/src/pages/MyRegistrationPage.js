@@ -1,6 +1,8 @@
 import React, {useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
+
 export default function MyRegistrationPage(){
   const [username,setUsername]=useState('');
   const [password,setPassword]=useState('');
@@ -9,16 +11,19 @@ export default function MyRegistrationPage(){
 
   const submit = (e)=>{
     e.preventDefault();
-    const users = JSON.parse(localStorage.getItem('users')||'[]');
-    if(users.find(u=>u.username===username)){
-      setError('Username already exists');
-      return;
-    }
-    const user = {username,password,projects:[]};
-    users.push(user);
-    localStorage.setItem('users', JSON.stringify(users));
-    localStorage.setItem('currentUser', JSON.stringify(user));
-    navigate('/portal');
+    fetch(`${API_BASE}/api/register`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username,password})
+    }).then(async res=>{
+      const body = await res.json();
+      if(res.status===201 && body.user){
+        localStorage.setItem('currentUser', JSON.stringify(body.user));
+        navigate('/portal');
+      } else {
+        setError(body.message || 'Could not register');
+      }
+    }).catch(e=>setError('Server error'));
   };
 
   return (
