@@ -1,11 +1,6 @@
 import React, {useState} from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-function findUser(username, password){
-  const users = JSON.parse(localStorage.getItem('users')||'[]');
-  return users.find(u=>u.username===username && u.password===password);
-}
-
 export default function MyLoginPage(){
   const [username,setUsername]=useState('');
   const [password,setPassword]=useState('');
@@ -14,13 +9,32 @@ export default function MyLoginPage(){
 
   const submit = (e)=>{
     e.preventDefault();
-    const user = findUser(username,password);
-    if(user){
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      navigate('/portal');
-    } else {
-      setError('Invalid credentials');
+    setError('');
+    if(!username || !password){
+      setError('Username and password required');
+      return;
     }
+
+    fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then(async res => {
+      if(res.status === 200){
+        const body = await res.json().catch(()=>null);
+        if(body && body.user){
+          try{ localStorage.setItem('currentUser', JSON.stringify(body.user)); }catch(e){}
+        }
+        navigate('/portal');
+      } else if(res.status === 401){
+        setError('Invalid credentials');
+      } else {
+        const body = await res.json().catch(()=>({}));
+        setError(body.message || `Login failed (status ${res.status})`);
+      }
+    }).catch(err=>{
+      setError('Network error: '+(err.message||err));
+    });
   };
 
   return (

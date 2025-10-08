@@ -3,13 +3,46 @@ import React, {useState} from 'react';
 export default function ForgotMyPassword(){
   const [username,setUsername]=useState('');
   const [message,setMessage]=useState('');
+  const [isError,setIsError]=useState(false);
+  const [submitting,setSubmitting]=useState(false);
 
   const submit = (e)=>{
     e.preventDefault();
-    const users = JSON.parse(localStorage.getItem('users')||'[]');
-    const u = users.find(x=>x.username===username);
-    if(u) setMessage('Your password is: ' + u.password + ' (local demo)');
-    else setMessage('User not found');
+    setMessage('');
+    setIsError(false);
+    if(!username){
+      setIsError(true);
+      setMessage('Username required');
+      return;
+    }
+
+    setSubmitting(true);
+
+    fetch('/forgot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    }).then(async res => {
+      setSubmitting(false);
+      const body = await res.json().catch(()=>({}));
+      if(res.status === 200){
+        setIsError(false);
+        setMessage(body.message || 'Lookup successful');
+      } else if(res.status === 404){
+        setIsError(true);
+        setMessage('User not found');
+      } else if(res.status === 400){
+        setIsError(true);
+        setMessage(body.message || 'Bad request');
+      } else {
+        setIsError(true);
+        setMessage(body.message || `Lookup failed (status ${res.status})`);
+      }
+    }).catch(err=>{
+      setSubmitting(false);
+      setIsError(true);
+      setMessage('Network error: ' + (err.message||err));
+    });
   };
 
   return (
@@ -27,7 +60,7 @@ export default function ForgotMyPassword(){
         </div>
       </form>
       {message && (
-        <div className={message.includes('not found') ? 'error-message' : 'success-message'} style={{marginTop:20}}>
+        <div className={isError ? 'error-message' : 'success-message'} style={{marginTop:20}}>
           {message}
         </div>
       )}

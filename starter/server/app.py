@@ -1,37 +1,87 @@
 # Import necessary libraries and modules
 from bson.objectid import ObjectId
 from flask import Flask, request, jsonify
-
-# Import database modules
-from mongoDB import MongoDB
-from usersDatabase import UsersDatabase
-from hardwareDatabase import HardwareDatabase
-from projectsDatabase import ProjectsDatabase
+from flask_cors import CORS
+from flask_pymongo import PyMongo
 
 # Define the MongoDB connection string
-MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/?retryWrites=true&w=majority&appName=ECE461L"
+MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/Team_Project?retryWrites=true&w=majority&appName=ECE461L"
 
 # Initialize a new Flask web application
 app = Flask(__name__)
+app.config["MONGO_URI"] = MONGODB_SERVER
+mongo = PyMongo()
+mongo.init_app(app)
+CORS(app)
 
 # Route for user login
 @app.route('/login', methods=['POST'])
 def login():
     # Extract data from request
     data = request.json
-    userid = data.get('userid')
     username = data.get('username')
     password = data.get('password')
 
+    if not username or not password:
+        return jsonify({"message": "username and password required"}), 400
+
     # Connect to MongoDB and attempt to log in using the usersDB module
-    users_db = UsersDatabase()
-    login_success = users_db.login(userid, username, password)
+    login_success = mongo.db.user_info.find_one({"username": username, "password": password})
     if login_success:
-        return jsonify({"message": "Login successful"}), 200
+        # Return a safe user object without the password
+        user_safe = {"_id": str(login_success.get("_id")), "username": login_success.get("username"), "projects": login_success.get("projects", [])}
+        return jsonify({"message": "Login successful", "user": user_safe}), 200
     else:
         return jsonify({"message": "Invalid credentials"}), 401
 
+# Route for adding a new user
+@app.route('/add_user', methods=['POST'])
+def add_user():
+    # Extract data from request
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
 
+    if not username or not password:
+        return jsonify({"message": "username and password required"}), 400
+
+    # Check if the user already exists by username
+    existing_user = mongo.db.user_info.find_one({"username": username})
+    if existing_user:
+        return jsonify({"message": "User already exists"}), 409
+
+    # Create a simple user document (Mongo will generate _id)
+    user_doc = {
+        "username": username,
+        "password": password,
+        "projects": []
+    }
+
+    result = mongo.db.user_info.insert_one(user_doc)
+    inserted_id = str(result.inserted_id)
+
+    # Return the created user info (omit password). No token or server-side userid.
+    user_safe = {"_id": inserted_id, "username": username, "projects": []}
+    return jsonify({"message": "User added successfully", "user": user_safe}), 201
+
+# Rouet for password retrieval
+@app.route('/forgot', methods=['POST'])
+def forgot_password():
+    # Extract data from request
+    data = request.json
+    username = data.get('username')
+
+    if not username:
+        return jsonify({"message": "username required"}), 400
+
+    # Check if the user exists by username
+    existing_user = mongo.db.user_info.find_one({"username": username})
+    if not existing_user:
+        return jsonify({"message": "User does not exist"}), 404
+
+    # In a real application, you would send an email with a password reset link or temporary password.
+    # Here, we will just return a message with the password for demonstration purposes.
+    return jsonify({"message": f"Your password is: {existing_user['password']}"}), 200
 
 # Route for the main page (Work in progress)
 @app.route('/main')
@@ -60,23 +110,6 @@ def join_project():
 
     # Return a JSON response
     return jsonify({})
-
-# Route for adding a new user
-@app.route('/add_user', methods=['POST'])
-def add_user():
-    # Extract data from request
-    data = request.json
-    userid = data.get('userid')
-    username = data.get('username')
-    password = data.get('password')
-
-    # Connect to MongoDB and attempt to add the user using the usersDB module
-    users_db = UsersDatabase()
-    user_added = users_db.addUser(userid, username, password)
-    if user_added:
-        return jsonify({"message": "User added successfully"}), 201
-    else:
-        return jsonify({"message": "User already exists"}), 409
 
 # Route for getting the list of user projects
 @app.route('/get_user_projects_list', methods=['POST'])
