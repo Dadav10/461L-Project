@@ -6,12 +6,12 @@ export default function Project({project, onJoin}){
     <div className="project-item card">
       <h3>{project.name}</h3>
       <p>{project.description}</p>
-      <small>ID: {project.id}</small>
-      <div style={{marginTop:8}}>
-        <button onClick={() => onJoin && onJoin(project.id)} className="btn btn-primary" style={{padding:'8px 16px'}}>
+      <span className="project-meta">ID: {project.id}</span>
+      <div className="project-actions">
+        <button onClick={() => onJoin && onJoin(project.id)} className="btn btn-primary">
           Join Project
         </button>
-        <Link to={`/project/${project.id}`} className="btn btn-secondary" style={{marginLeft:8, padding:'8px 16px'}}>
+        <Link to={`/project/${project.id}`} className="btn btn-secondary">
           View
         </Link>
       </div>
