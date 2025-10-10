@@ -11,6 +11,14 @@ NC='\033[0m' # No Color
 # Virtual environment directory name
 VENV_DIR=".env"
 
+# Helper: detect whether the script is being sourced or executed
+# If the script is executed (./startup.sh) it cannot modify the parent shell's
+# environment. If it's sourced (source ./startup.sh or . ./startup.sh) it can.
+is_sourced() {
+    # In bash, when a script is sourced ${BASH_SOURCE[0]} != $0
+    [ "${BASH_SOURCE[0]}" != "$0" ]
+}
+
 echo -e "${GREEN}Starting Python environment setup...${NC}"
 
 # Check if Python is installed
