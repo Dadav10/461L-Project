@@ -30,7 +30,7 @@ function App() {
           {!currentUser && <Link to="/login">Login</Link>}
           {!currentUser && <Link to="/register">Register</Link>}
           {currentUser && <Link to="/portal">Portal</Link>}
-          {currentUser && <button onClick={logout}>Logout</button>}
+          {currentUser && <button onClick={logout} className="btn btn-secondary">Logout</button>}
         </nav>
       </header>
 
