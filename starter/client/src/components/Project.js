@@ -8,6 +8,7 @@ export default function Project({project, onJoin, onLeave, joined}){
       <p>{project.description}</p>
       <span className="project-meta">ID: {project.id}</span>
       <div className="project-actions">
+<<<<<<< HEAD
         {joined ? (
           <button onClick={() => onLeave && onLeave(project.id)} className="btn btn-warning">
             Leave Project
@@ -17,6 +18,11 @@ export default function Project({project, onJoin, onLeave, joined}){
             Join Project
           </button>
         )}
+=======
+        <button onClick={() => onJoin && onJoin(project.id)} className="btn btn-primary">
+          Join Project
+        </button>
+>>>>>>> d42d6b9ec21445d633897eb8196412e98b415909
         <Link to={`/project/${project.id}`} className="btn btn-secondary">
           View
         </Link>
