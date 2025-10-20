@@ -4,9 +4,50 @@ import { useNavigate } from 'react-router-dom';
 export default function MyRegistrationPage(){
   const [username,setUsername]=useState('');
   const [password,setPassword]=useState('');
+  const [securityQuestion,setSecurityQuestion]=useState('');
+  const [securityAnswer,setSecurityAnswer]=useState('');
   const [error,setError]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const navigate = useNavigate();
+
+  const CHAR_MIN = 34;
+const CHAR_MAX = 126;
+const RING_LEN = CHAR_MAX - CHAR_MIN + 1;
+
+function validInputs(text, N, D) {
+    if (!Number.isInteger(N) || N < 1) return false;
+    if (D !== 1 && D !== -1) return false;
+    if (text === null || text === undefined) return false;
+    for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        if (ch === "!" || ch === " " || code < CHAR_MIN || code > CHAR_MAX) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function encrypt(inputText, N, D) {
+    if (!validInputs(inputText, N, D)) {
+        throw new Error("Invalid input to encrypt");
+    }
+    const shift = N * D;
+    const rev = [...inputText].reverse().join('');
+    return [...rev].map(ch => 
+        String.fromCharCode(CHAR_MIN + ((ch.charCodeAt(0) - CHAR_MIN + shift) % RING_LEN))
+    ).join('');
+}
+
+function decrypt(encryptedText, N, D) {
+    if (!validInputs(encryptedText, N, D)) {
+        throw new Error("Invalid input to decrypt");
+    }
+    const shift = -D * N;
+    const unshifted = [...encryptedText].map(ch => 
+        String.fromCharCode(CHAR_MIN + ((ch.charCodeAt(0) - CHAR_MIN + shift) % RING_LEN))
+    ).join('');
+    return [...unshifted].reverse().join('');
+}
 
   const submit = (e)=>{
     e.preventDefault();
@@ -15,38 +56,19 @@ export default function MyRegistrationPage(){
       setError('Username and password are required');
       return;
     }
-
-    setSubmitting(true);
-
-    fetch('/add_user', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, password })
-    }).then(async res => {
-      setSubmitting(false);
-      if(res.status === 201){
-        // Registration successful. Save returned user/token so the portal can use it.
-        const body = await res.json().catch(()=>null);
-        if(body && body.user){
-          try{
-            localStorage.setItem('currentUser', JSON.stringify(body.user));
-          }catch(e){
-            // ignore localStorage failures
-          }
-        }
-        navigate('/portal');
-      } else if(res.status === 409){
-        setError('Username already exists');
-      } else {
-        const body = await res.json().catch(()=>({}));
-        setError(body.message || `Registration failed (status ${res.status})`);
-      }
-    }).catch(err=>{
-      setSubmitting(false);
-      setError('Network error: ' + (err.message||err));
-    });
+    if(!securityQuestion || !securityAnswer){
+      setError('Please provide a security question and answer');
+      return;
+    }
+  const encrPass = encrypt(password,3,1);
+  const user = {username, password: encrPass, projects:[]};
+    // store security question and answer (for demo purposes stored in plain text)
+    user.securityQuestion = securityQuestion;
+    user.securityAnswer = securityAnswer;
+    users.push(user);
+    localStorage.setItem('users', JSON.stringify(users));
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    navigate('/portal');
   };
 
   return (
@@ -61,13 +83,28 @@ export default function MyRegistrationPage(){
           <label>Password</label>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         </div>
+        <div className="form-row">
+          <label>Security question</label>
+          <select value={securityQuestion} onChange={e=>setSecurityQuestion(e.target.value)}>
+            <option value="">-- choose a question --</option>
+            <option value="first_pet">What was the name of your first pet?</option>
+            <option value="mother_maiden">What is your mother's maiden name?</option>
+            <option value="birth_city">In which city were you born?</option>
+          </select>
+        </div>
+        <div className="form-row">
+          <label>Answer</label>
+          <input value={securityAnswer} onChange={e=>setSecurityAnswer(e.target.value)} />
+        </div>
         {error && <div className="error-message">{error}</div>}
         <div style={{marginTop:20, textAlign:'center'}}>
-          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}} disabled={submitting}>
-            {submitting ? 'Creating account...' : 'Create Account'}
+          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
+            Create Account
           </button>
         </div>
       </form>
     </div>
+    
+    
   )
 }

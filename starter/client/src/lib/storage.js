@@ -15,6 +15,7 @@ export function initSeed(){
     ];
     localStorage.setItem('projects', JSON.stringify(projects));
   }
+  localStorage.removeItem('users');
 }
 
 export function loadHardware(){

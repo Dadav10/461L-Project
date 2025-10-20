@@ -1,6 +1,39 @@
 import React, {useState} from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
+const CHAR_MIN = 34;
+const CHAR_MAX = 126;
+const RING_LEN = CHAR_MAX - CHAR_MIN + 1;
+
+function validInputs(text, N, D) {
+    if (!Number.isInteger(N) || N < 1) return false;
+    if (D !== 1 && D !== -1) return false;
+    if (text === null || text === undefined) return false;
+    for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        if (ch === "!" || ch === " " || code < CHAR_MIN || code > CHAR_MAX) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function encrypt(inputText, N, D) {
+    if (!validInputs(inputText, N, D)) {
+        throw new Error("Invalid input to encrypt");
+    }
+    const shift = N * D;
+    const rev = [...inputText].reverse().join('');
+    return [...rev].map(ch => 
+        String.fromCharCode(CHAR_MIN + ((ch.charCodeAt(0) - CHAR_MIN + shift) % RING_LEN))
+    ).join('');
+}
+
+function findUserByUsername(username){
+  const users = JSON.parse(localStorage.getItem('users')||'[]');
+  return users.find(u=>u.username===username);
+}
+
 export default function MyLoginPage(){
   const [username,setUsername]=useState('');
   const [password,setPassword]=useState('');
@@ -9,32 +42,22 @@ export default function MyLoginPage(){
 
   const submit = (e)=>{
     e.preventDefault();
-    setError('');
-    if(!username || !password){
-      setError('Username and password required');
+    const user = findUserByUsername(username);
+    if(!user){
+      setError('Invalid credentials');
       return;
     }
-
-    fetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    }).then(async res => {
-      if(res.status === 200){
-        const body = await res.json().catch(()=>null);
-        if(body && body.user){
-          try{ localStorage.setItem('currentUser', JSON.stringify(body.user)); }catch(e){}
-        }
+    try{
+      const enc = encrypt(password,3,1);
+      if(enc === user.password){
+        localStorage.setItem('currentUser', JSON.stringify(user));
         navigate('/portal');
-      } else if(res.status === 401){
-        setError('Invalid credentials');
-      } else {
-        const body = await res.json().catch(()=>({}));
-        setError(body.message || `Login failed (status ${res.status})`);
+        return;
       }
-    }).catch(err=>{
-      setError('Network error: '+(err.message||err));
-    });
+    }catch(err){
+      // fallthrough to error
+    }
+    setError('Invalid credentials');
   };
 
   return (
