@@ -55,64 +55,97 @@ export default function ForgotMyPassword(){
 
   const lookup = (e)=>{
     e.preventDefault();
-    const users = JSON.parse(localStorage.getItem('users')||'[]');
-    const u = users.find(x=>x.username===username);
-    if(u){
-      setUser(u);
-      setMessage('Please answer your security question to reveal/reset password.');
-    }
-    else {
-      setUser(null);
-      setMessage('User not found');
-    }
+    setMessage('');
+    fetch('/forgot/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    })
+    .then(r=>r.json())
+    .then(json=>{
+      if(json && json.success && json.data){
+        setUser(json.data);
+        setMessage('Please answer your security question to reveal/reset password.');
+      } else {
+        setUser(null);
+        setMessage(json && json.message ? json.message : 'User not found');
+      }
+    })
+    .catch(err=>{
+      console.error('Lookup error', err);
+      setMessage('Network error');
+    });
   };
 
   const verify = (e)=>{
     e.preventDefault();
     if(!user){ setMessage('No user selected'); return; }
-    if(answer === user.securityAnswer){
-      try{
-        const plain = decrypt(user.password,3,1);
-        setMessage('Your password is: ' + plain);
-      }catch(err){
-        setMessage('Could not decrypt stored password');
+    setMessage('');
+    // send encrypted answer
+    const encryptedAnswer = encrypt(answer, 5, 1);
+    fetch('/forgot/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user.username, answer: encryptedAnswer })
+    })
+    .then(async r=>r.json())
+    .then(json=>{
+      if(json && json.success){
+        // server may return the plaintext password or indicate success differently
+        if(json.data && json.data.password){
+          try{
+            const decrypted = decrypt(json.data.password, 5, 1);
+            setMessage('Your password is: ' + decrypted);
+          }catch(err){
+            // if decryption fails, fall back to raw value
+            setMessage('Your password is: ' + json.data.password);
+          }
+        } else {
+          setMessage(json.message || 'Verification succeeded');
+        }
+      } else {
+        setMessage(json && json.message ? json.message : 'Incorrect answer');
       }
-    } else {
-      setMessage('Incorrect answer');
-    }
+    })
+    .catch(err=>{
+      console.error('Verify error', err);
+      setMessage('Network error');
+    });
   };
 
   const reset = (e)=>{
     e.preventDefault();
     if(!user) { setMessage('No user selected'); return; }
-    if(answer !== user.securityAnswer){ setMessage('Incorrect answer'); return; }
     if(!newPassword) { setMessage('Please provide a new password'); return; }
-    try{
-      const enc = encrypt(newPassword,3,1);
-      const users = JSON.parse(localStorage.getItem('users')||'[]');
-      const idx = users.findIndex(x=>x.username===user.username);
-      if(idx>=0){
-        users[idx].password = enc;
-        localStorage.setItem('users', JSON.stringify(users));
-        const cur = JSON.parse(localStorage.getItem('currentUser')||'null');
-        if(cur && cur.username === user.username){
-          cur.password = enc;
-          localStorage.setItem('currentUser', JSON.stringify(cur));
-        }
+    setMessage('');
+    // send encrypted answer and encrypted new password
+    const encryptedAnswer = encrypt(answer, 5, 1);
+    const encryptedNew = encrypt(newPassword, 5, 1);
+    fetch('/forgot/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user.username, answer: encryptedAnswer, newPassword: encryptedNew })
+    })
+    .then(r=>r.json())
+    .then(json=>{
+      if(json && json.success){
         setMessage('Password reset successfully');
         setUser(null);
         setUsername(''); setAnswer(''); setNewPassword('');
       } else {
-        setMessage('User record not found when updating');
+        setMessage(json && json.message ? json.message : 'Reset failed');
       }
-    }catch(err){
-      setMessage('Error encrypting new password');
-    }
+    })
+    .catch(err=>{
+      console.error('Reset error', err);
+      setMessage('Network error');
+    });
   };
 
   return (
     <div className="card" style={{maxWidth:420,margin:'20px auto'}}>
       <h2>Forgot Password</h2>
+
       {!user && (
         <form onSubmit={lookup}>
           <div className="form-row">
@@ -133,13 +166,14 @@ export default function ForgotMyPassword(){
             <label>Security question</label>
             <div className="card" style={{padding:10}}>{QUESTION_MAP[user.securityQuestion] || 'Security question not set'}</div>
           </div>
+
           <form onSubmit={verify}>
             <div className="form-row">
               <label>Answer</label>
               <input value={answer} onChange={e=>setAnswer(e.target.value)} />
             </div>
             <div style={{display:'flex',gap:8, marginTop:12}}>
-              <button className="btn btn-primary" onClick={verify}>Verify</button>
+              <button type="submit" className="btn btn-primary">Verify</button>
               <div style={{flex:1}} />
             </div>
           </form>
@@ -151,24 +185,21 @@ export default function ForgotMyPassword(){
               <input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} />
             </div>
             <div style={{marginTop:12}}>
-              <button className="btn btn-primary" onClick={reset}>Reset Password</button>
+              <button type="submit" className="btn btn-primary">Reset Password</button>
             </div>
           </form>
         </div>
       )}
 
       {message && (
-        <div className={message.includes('not found') || message.includes('Incorrect') ? 'error-message' : 'success-message'} style={{marginTop:20}}>
-          {message}
-        </div>
-        <div style={{marginTop:20, textAlign:'center'}}>
-          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
-            Lookup Password
-          </button>
-        </div>
-      </form>
-      {message && (
-        <div className={message.includes('not found') ? 'error-message' : 'success-message'} style={{marginTop:20}}>
+        <div
+          className={
+            message.toLowerCase().includes('not found') || message.toLowerCase().includes('incorrect')
+              ? 'error-message'
+              : 'success-message'
+          }
+          style={{marginTop:20}}
+        >
           {message}
         </div>
       )}

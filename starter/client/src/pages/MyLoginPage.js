@@ -29,10 +29,9 @@ function encrypt(inputText, N, D) {
     ).join('');
 }
 
-function findUserByUsername(username){
-  const users = JSON.parse(localStorage.getItem('users')||'[]');
-  return users.find(u=>u.username===username);
-}
+// NOTE: localStorage removed. Authentication is delegated to backend API.
+// Expected backend endpoint: POST /api/login with JSON { username, password }
+// Response shape expected: { success: boolean, message?: string }
 
 export default function MyLoginPage(){
   const [username,setUsername]=useState('');
@@ -42,22 +41,25 @@ export default function MyLoginPage(){
 
   const submit = (e)=>{
     e.preventDefault();
-    const user = findUserByUsername(username);
-    if(!user){
-      setError('Invalid credentials');
-      return;
-    }
-    try{
-      const enc = encrypt(password,3,1);
-      if(enc === user.password){
-        localStorage.setItem('currentUser', JSON.stringify(user));
+    setError('');
+    const encryptedPassword = encrypt(password, 5, 1);
+    fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password: encryptedPassword })
+    })
+    .then(async r=>r.json())
+    .then(json => {
+      if(json && json.success){
+        // persist user info so header can show logout
+        if(json.data){
+          localStorage.setItem('currentUser', JSON.stringify(json.data));
+        }
         navigate('/portal');
-        return;
+      } else {
+        setError(json && json.message ? json.message : 'Login failed');
       }
-    }catch(err){
-      // fallthrough to error
-    }
-    setError('Invalid credentials');
+    })
   };
 
   return (
