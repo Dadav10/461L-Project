@@ -7,6 +7,7 @@ export default function MyRegistrationPage(){
   const [securityQuestion,setSecurityQuestion]=useState('');
   const [securityAnswer,setSecurityAnswer]=useState('');
   const [error,setError]=useState('');
+  const [submitting,setSubmitting]=useState(false);
   const navigate = useNavigate();
 
   const CHAR_MIN = 34;
@@ -50,9 +51,9 @@ function decrypt(encryptedText, N, D) {
 
   const submit = (e)=>{
     e.preventDefault();
-    const users = JSON.parse(localStorage.getItem('users')||'[]');
-    if(users.find(u=>u.username===username)){
-      setError('Username already exists');
+    setError('');
+    if(!username || !password){
+      setError('Username and password are required');
       return;
     }
     if(!securityQuestion || !securityAnswer){
@@ -82,7 +83,6 @@ function decrypt(encryptedText, N, D) {
           <label>Password</label>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         </div>
-<<<<<<< HEAD
         <div className="form-row">
           <label>Security question</label>
           <select value={securityQuestion} onChange={e=>setSecurityQuestion(e.target.value)}>
@@ -96,8 +96,6 @@ function decrypt(encryptedText, N, D) {
           <label>Answer</label>
           <input value={securityAnswer} onChange={e=>setSecurityAnswer(e.target.value)} />
         </div>
-=======
->>>>>>> d42d6b9ec21445d633897eb8196412e98b415909
         {error && <div className="error-message">{error}</div>}
         <div style={{marginTop:20, textAlign:'center'}}>
           <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
