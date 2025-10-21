@@ -51,9 +51,9 @@ export default function MyLoginPage(){
     .then(async r=>r.json())
     .then(json => {
       if(json && json.success){
-        // persist user info so header can show logout
-        if(json.data){
-          localStorage.setItem('currentUser', JSON.stringify(json.data));
+        // persist minimal user info (username) so header can show logout
+        if(json.data && json.data.username){
+          localStorage.setItem('currentUser', JSON.stringify({ username: json.data.username }));
         }
         navigate('/portal');
       } else {

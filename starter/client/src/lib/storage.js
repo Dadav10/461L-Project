@@ -9,11 +9,8 @@ export function initSeed(){
     localStorage.setItem('hardware', JSON.stringify(hw));
   }
   if(!localStorage.getItem('projects')){
-    const projects = [
-      {id:'p1', name:'Intro Robot', description:'Simple robotics project', usage: {}},
-      {id:'p2', name:'Sensor Array', description:'Environmental sensing', usage: {} }
-    ];
-    localStorage.setItem('projects', JSON.stringify(projects));
+    // Start with an empty projects list by default
+    localStorage.setItem('projects', JSON.stringify([]));
   }
   localStorage.removeItem('users');
 }

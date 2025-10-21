@@ -75,9 +75,9 @@ function decrypt(encryptedText, N, D) {
   .then(json=>{
     setSubmitting(false);
     if(json && json.success){
-      // persist a simple currentUser so header shows Logout
-      const cur = { username, projects: [] };
-      localStorage.setItem('currentUser', JSON.stringify(cur));
+  // persist minimal currentUser (username only)
+  const cur = { username };
+  localStorage.setItem('currentUser', JSON.stringify(cur));
       navigate('/portal');
     } else {
       setError(json && json.message ? json.message : 'Registration failed');

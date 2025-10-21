@@ -3,6 +3,8 @@ from bson.objectid import ObjectId
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_pymongo import PyMongo
+import threading
+import time
 
 # Define the MongoDB connection string
 MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/Team_Project?retryWrites=true&w=majority&appName=ECE461L"
@@ -13,6 +15,23 @@ app.config["MONGO_URI"] = MONGODB_SERVER
 mongo = PyMongo()
 mongo.init_app(app)
 CORS(app)
+
+# Warm up MongoDB connection in background to reduce first-request latency
+def warmup_mongo(retries=3, delay=1.0):
+    """Attempt to ping MongoDB a few times in background. Non-blocking."""
+    for attempt in range(1, retries+1):
+        try:
+            # mongo.cx is the underlying MongoClient
+            mongo.cx.admin.command('ping')
+            app.logger.info('MongoDB warm-up successful on attempt %d', attempt)
+            return
+        except Exception as e:
+            app.logger.warning('MongoDB warm-up attempt %d failed: %s', attempt, e)
+            time.sleep(delay)
+    app.logger.error('MongoDB warm-up failed after %d attempts', retries)
+
+# start the warmup in a daemon thread so it doesn't block startup
+threading.Thread(target=warmup_mongo, daemon=True).start()
 
 # Route for user login
 @app.route('/login', methods=['POST'])
@@ -143,7 +162,7 @@ def reset_user_password():
     return jsonify({"success": True, "message": "Password reset successfully"}), 200
 
 # Route for getting all projects
-@app.route('/get_all_projects', methods=['GET'])
+@app.route('/get_all_projects', methods=['POST'])
 def get_all_projects():
     # Fetch all projects using the projectsDB module
     projects = mongo.db.projects.find()
@@ -188,7 +207,7 @@ def create_project():
     # Attempt to create the project using the projectsDB module
     new_project = {
         "name": project_name,
-        "_id": str(ObjectId()),
+        "_id": ObjectId(),
         "description": project_description,
         "authorized_users": [],
         "hardware": [],
@@ -212,14 +231,14 @@ def join_project():
     # Attempt to add the user to the project using the projectsDB module
     project = mongo.db.projects.find_one({"_id": ObjectId(project_id)})
     if not project:
-        return jsonify({"success": False, "message": "Project not found"}), 404
+        return jsonify({"success": False, "message": f"Project {project_id} not found"}), 404
     if username not in project.get('authorized_users', []):
         mongo.db.projects.update_one(
             {"_id": ObjectId(project_id)},
             {"$push": {"authorized_users": username}}
         )
     # Return a JSON response
-    return jsonify({"success": True, "message": "User added to project"}),
+    return jsonify({"success": True, "message": "User added to project"}), 200
 
 # Route for leaving a project
 @app.route('/leave_project', methods=['POST'])
