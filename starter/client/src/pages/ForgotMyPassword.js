@@ -158,20 +158,17 @@ export default function ForgotMyPassword(){
       )}
 
       {message && (
-        <div className={message.includes('not found') || message.includes('Incorrect') ? 'error-message' : 'success-message'} style={{marginTop:20}}>
-          {message}
-        </div>
-        <div style={{marginTop:20, textAlign:'center'}}>
-          <button type="submit" className="btn btn-primary" style={{width:'100%', padding:'14px'}}>
-            Lookup Password
-          </button>
-        </div>
-      </form>
-      {message && (
-        <div className={message.includes('not found') ? 'error-message' : 'success-message'} style={{marginTop:20}}>
+        <div
+          className={
+            message.includes('not found') || message.includes('Incorrect')
+              ? 'error-message'
+              : 'success-message'
+          }
+          style={{ marginTop: 20 }}
+        >
           {message}
         </div>
       )}
     </div>
-  )
+  );
 }
