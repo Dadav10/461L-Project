@@ -60,15 +60,34 @@ function decrypt(encryptedText, N, D) {
       setError('Please provide a security question and answer');
       return;
     }
-  const encrPass = encrypt(password,3,1);
-  const user = {username, password: encrPass, projects:[]};
-    // store security question and answer (for demo purposes stored in plain text)
-    user.securityQuestion = securityQuestion;
-    user.securityAnswer = securityAnswer;
-    users.push(user);
-    localStorage.setItem('users', JSON.stringify(users));
-    localStorage.setItem('currentUser', JSON.stringify(user));
-    navigate('/portal');
+  // Send registration to backend. Backend should handle encryption and storage.
+  // encrypt password and security answer before sending
+  const encryptedPassword = encrypt(password, 5, 1);
+  const encryptedAnswer = encrypt(securityAnswer, 5, 1);
+  const payload = { username, password: encryptedPassword, securityQuestion, securityAnswer: encryptedAnswer };
+  setSubmitting(true);
+  fetch('/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(async r=>r.json())
+  .then(json=>{
+    setSubmitting(false);
+    if(json && json.success){
+  // persist minimal currentUser (username only)
+  const cur = { username };
+  localStorage.setItem('currentUser', JSON.stringify(cur));
+      navigate('/portal');
+    } else {
+      setError(json && json.message ? json.message : 'Registration failed');
+    }
+  })
+  .catch(err=>{
+    setSubmitting(false);
+    console.error('Registration error', err);
+    setError('Network error');
+  });
   };
 
   return (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import MyLoginPage from './pages/MyLoginPage';
 import MyRegistrationPage from './pages/MyRegistrationPage';
 import MyUserPortal from './pages/MyUserPortal';
@@ -18,6 +18,8 @@ function App() {
   };
 
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  const location = useLocation();
+  const onLogin = location.pathname === '/' || location.pathname === '/login';
 
   // initialize sample data for demo
   React.useEffect(()=>{ initSeed(); },[]);
@@ -27,10 +29,10 @@ function App() {
       <header className="app-header">
         <h1>Team Project Portal</h1>
         <nav>
-          {!currentUser && <Link to="/login">Login</Link>}
-          {!currentUser && <Link to="/register">Register</Link>}
-          {currentUser && <Link to="/portal">Portal</Link>}
-          {currentUser && <button onClick={logout} className="btn btn-secondary">Logout</button>}
+          {(!currentUser || onLogin) && <Link to="/login">Login</Link>}
+          {(!currentUser || onLogin) && <Link to="/register">Register</Link>}
+          {!onLogin && currentUser && <Link to="/portal">Portal</Link>}
+          {!onLogin && currentUser && <button onClick={logout} className="btn btn-secondary">Logout</button>}
         </nav>
       </header>
 

@@ -152,9 +152,7 @@ projects_db.checkOutHW("proj001", "Arduino Uno", 5, "user001")
 - Activation note: to have the virtual environment activated in your interactive shell, source the script rather than executing it:
 
 ```bash
-source ./startup.sh
-# or
-. ./startup.sh
+source startup.sh
 ```
 
 On Windows using PowerShell, activate the virtual environment with:

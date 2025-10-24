@@ -3,6 +3,8 @@ from bson.objectid import ObjectId
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_pymongo import PyMongo
+import threading
+import time
 
 # Define the MongoDB connection string
 MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/Team_Project?retryWrites=true&w=majority&appName=ECE461L"
@@ -14,6 +16,23 @@ mongo = PyMongo()
 mongo.init_app(app)
 CORS(app)
 
+# Warm up MongoDB connection in background to reduce first-request latency
+def warmup_mongo(retries=3, delay=1.0):
+    """Attempt to ping MongoDB a few times in background. Non-blocking."""
+    for attempt in range(1, retries+1):
+        try:
+            # mongo.cx is the underlying MongoClient
+            mongo.cx.admin.command('ping')
+            app.logger.info('MongoDB warm-up successful on attempt %d', attempt)
+            return
+        except Exception as e:
+            app.logger.warning('MongoDB warm-up attempt %d failed: %s', attempt, e)
+            time.sleep(delay)
+    app.logger.error('MongoDB warm-up failed after %d attempts', retries)
+
+# start the warmup in a daemon thread so it doesn't block startup
+threading.Thread(target=warmup_mongo, daemon=True).start()
+
 # Route for user login
 @app.route('/login', methods=['POST'])
 def login():
@@ -23,50 +42,59 @@ def login():
     password = data.get('password')
 
     if not username or not password:
-        return jsonify({"message": "username and password required"}), 400
+        return jsonify({"success": False, "message": "username and password required"}), 400
+    
+    # Check if the user exists by username
+    existing_user = mongo.db.user_info.find_one({"username": username})
+    
+    if not existing_user:
+        return jsonify({"success": False, "message": "Invalid username or password"}), 401
+    
+    if existing_user.get('password') != password:
+        return jsonify({"success": False, "message": "Invalid username or password"}), 401
+    
+    # Return limited user info expected by client (do NOT return the password)
+    user_safe = {
+        "username": existing_user.get("username"),
+        "projects": existing_user.get("projects", [])
+    }
+    return jsonify({"success": True, "data": user_safe}), 200
 
-    # Connect to MongoDB and attempt to log in using the usersDB module
-    login_success = mongo.db.user_info.find_one({"username": username, "password": password})
-    if login_success:
-        # Return a safe user object without the password
-        user_safe = {"_id": str(login_success.get("_id")), "username": login_success.get("username"), "projects": login_success.get("projects", [])}
-        return jsonify({"message": "Login successful", "user": user_safe}), 200
-    else:
-        return jsonify({"message": "Invalid credentials"}), 401
 
 # Route for adding a new user
-@app.route('/add_user', methods=['POST'])
-def add_user():
+@app.route('/register', methods=['POST'])
+def register():
     # Extract data from request
     data = request.json
     username = data.get('username')
     password = data.get('password')
+    security_question = data.get('securityQuestion')
+    security_answer = data.get('securityAnswer')
 
-    if not username or not password:
-        return jsonify({"message": "username and password required"}), 400
-
-    # Check if the user already exists by username
+    if not username or not password or not security_question or security_answer is None:
+        return jsonify({"success": False, "message": "username, password, securityQuestion and securityAnswer required"}), 400
+    
+    # Check if the user already exists
     existing_user = mongo.db.user_info.find_one({"username": username})
     if existing_user:
-        return jsonify({"message": "User already exists"}), 409
-
-    # Create a simple user document (Mongo will generate _id)
-    user_doc = {
+        return jsonify({"success": False, "message": "Username already exists"}), 409
+    
+    # Create new user document
+    new_user = {
         "username": username,
         "password": password,
+        "security_question": security_question,
+        "security_answer": security_answer,
         "projects": []
     }
 
-    result = mongo.db.user_info.insert_one(user_doc)
-    inserted_id = str(result.inserted_id)
-
-    # Return the created user info (omit password). No token or server-side userid.
-    user_safe = {"_id": inserted_id, "username": username, "projects": []}
-    return jsonify({"message": "User added successfully", "user": user_safe}), 201
-
-# Rouet for password retrieval
-@app.route('/forgot', methods=['POST'])
-def forgot_password():
+    # Insert new user into the database
+    mongo.db.user_info.insert_one(new_user)
+    return jsonify({"success": True, "message": "User registered successfully"}), 201
+        
+# Route for password retrieval
+@app.route('/forgot/lookup', methods=['POST'])
+def lookup_user():
     # Extract data from request
     data = request.json
     username = data.get('username')
@@ -77,67 +105,160 @@ def forgot_password():
     # Check if the user exists by username
     existing_user = mongo.db.user_info.find_one({"username": username})
     if not existing_user:
-        return jsonify({"message": "User does not exist"}), 404
+        return jsonify({"success": False, "message": "User not found"}), 404
 
     # In a real application, you would send an email with a password reset link or temporary password.
-    # Here, we will just return a message with the password for demonstration purposes.
-    return jsonify({"message": f"Your password is: {existing_user['password']}"}), 200
+    # Return limited user info expected by client (do NOT return the password)
+    user_safe = {
+        "username": existing_user.get("username"),
+        "securityQuestion": existing_user.get("security_question"),
+        "projects": existing_user.get("projects", [])
+    }
+    return jsonify({"success": True, "data": user_safe}), 200
 
-# Route for the main page (Work in progress)
-@app.route('/main')
-def mainPage():
-    # Extract data from request
 
-    # Connect to MongoDB
+# Verify security answer for forgot-password flow
+@app.route('/forgot/verify', methods=['POST'])
+def verify_user():
+    data = request.json
+    username = data.get('username')
+    answer = data.get('answer')
 
-    # Fetch user projects using the usersDB module
+    if not username or answer is None:
+        return jsonify({"success": False, "message": "username and answer required"}), 400
 
-    # Close the MongoDB connection
+    existing_user = mongo.db.user_info.find_one({"username": username})
+    if not existing_user:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    # For demo: compare plaintext security_answer
+    if str(existing_user.get('security_answer','')) == str(answer):
+        # return password in data for the client to display (demo only)
+        return jsonify({"success": True, "data": {"password": existing_user.get('password')}}), 200
+    else:
+        return jsonify({"success": False, "message": "Incorrect answer"}), 401
+
+
+# Reset password endpoint for forgot-password flow
+@app.route('/forgot/reset', methods=['POST'])
+def reset_user_password():
+    data = request.json
+    username = data.get('username')
+    answer = data.get('answer')
+    newPassword = data.get('newPassword')
+
+    if not username or answer is None or not newPassword:
+        return jsonify({"success": False, "message": "username, answer and newPassword required"}), 400
+
+    existing_user = mongo.db.user_info.find_one({"username": username})
+    if not existing_user:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    if str(existing_user.get('security_answer','')) != str(answer):
+        return jsonify({"success": False, "message": "Incorrect answer"}), 401
+
+    # Update password (demo; no hashing)
+    mongo.db.user_info.update_one({"username": username}, {"$set": {"password": newPassword}})
+    return jsonify({"success": True, "message": "Password reset successfully"}), 200
+
+# Route for getting all projects
+@app.route('/get_all_projects', methods=['POST'])
+def get_all_projects():
+    # Fetch all projects using the projectsDB module
+    projects = mongo.db.projects.find()
+
+    if not projects:
+        return jsonify({"success": False, "message": "No projects found"}), 404
+
+    project_list = []
+    for project in projects:
+        project['_id'] = str(project['_id'])  # Convert ObjectId to string for JSON serialization
+        project_list.append(project)
 
     # Return a JSON response
-    return jsonify({})
+    return jsonify({"success": True, "data": project_list}), 200
 
-# Route for joining a project
-@app.route('/join_project', methods=['POST'])
-def join_project():
-    # Extract data from request
-
-    # Connect to MongoDB
-
-    # Attempt to join the project using the usersDB module
-
-    # Close the MongoDB connection
-
-    # Return a JSON response
-    return jsonify({})
 
 # Route for getting the list of user projects
-@app.route('/get_user_projects_list', methods=['POST'])
+@app.route('/get_user_projects_list', methods=['GET'])
 def get_user_projects_list():
     # Extract data from request
-
-    # Connect to MongoDB
+    data = request.json
+    username = data.get('username')
 
     # Fetch the user's projects using the usersDB module
-
-    # Close the MongoDB connection
+    user = mongo.db.user_info.find_one({"username": username})
+    if not user:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    user_projects = user.get('projects', [])
 
     # Return a JSON response
-    return jsonify({})
+    return jsonify({"success": True, "data": user_projects}), 200
 
 # Route for creating a new project
 @app.route('/create_project', methods=['POST'])
 def create_project():
     # Extract data from request
-
-    # Connect to MongoDB
+    data = request.json
+    user = data.get('username')
+    project_name = data.get('name')
+    project_description = data.get('description')
 
     # Attempt to create the project using the projectsDB module
+    new_project = {
+        "name": project_name,
+        "_id": ObjectId(),
+        "description": project_description,
+        "authorized_users": [],
+        "hardware": [],
+        "available_hardware": []
+    }
+    new_project["authorized_users"].append(user)
 
-    # Close the MongoDB connection
+    mongo.db.projects.insert_one(new_project)
 
     # Return a JSON response
-    return jsonify({})
+    return jsonify({"success": True, "data": new_project}), 200
+
+# Route for joining a project
+@app.route('/join_project', methods=['POST'])
+def join_project():
+    # Extract data from request
+    data = request.json
+    username = data.get('username')
+    project_id = data.get('project_id')
+
+    # Attempt to add the user to the project using the projectsDB module
+    project = mongo.db.projects.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        return jsonify({"success": False, "message": f"Project {project_id} not found"}), 404
+    if username not in project.get('authorized_users', []):
+        mongo.db.projects.update_one(
+            {"_id": ObjectId(project_id)},
+            {"$push": {"authorized_users": username}}
+        )
+    # Return a JSON response
+    return jsonify({"success": True, "message": "User added to project"}), 200
+
+# Route for leaving a project
+@app.route('/leave_project', methods=['POST'])
+def leave_project():
+    # Extract data from request
+    data = request.json
+    username = data.get('username')
+    project_id = data.get('project_id')
+
+    # Attempt to remove the user from the project using the projectsDB module
+    project = mongo.db.projects.find_one({"_id": ObjectId(project_id)})
+    if not project:
+        return jsonify({"success": False, "message": "Project not found"}), 404
+    if username in project.get('authorized_users', []):
+        mongo.db.projects.update_one(
+            {"_id": ObjectId(project_id)},
+            {"$pull": {"authorized_users": username}}
+        )
+    # Return a JSON response
+    return jsonify({"success": True, "message": "User removed from project"}), 200
 
 # Route for getting project information
 @app.route('/get_project_info', methods=['POST'])
