@@ -194,15 +194,15 @@ export default function ForgotMyPassword(){
       {message && (
         <div
           className={
-            message.toLowerCase().includes('not found') || message.toLowerCase().includes('incorrect')
+            message.includes('not found') || message.includes('Incorrect')
               ? 'error-message'
               : 'success-message'
           }
-          style={{marginTop:20}}
+          style={{ marginTop: 20 }}
         >
           {message}
         </div>
       )}
     </div>
-  )
+  );
 }
