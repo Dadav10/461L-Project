@@ -8,14 +8,35 @@ export default function HardwareList(){
   const [description,setDescription] = useState('');
 
   useEffect(()=>{
-    setHardware(loadHardware());
+    // Try to load hardware from server first; fall back to localStorage
+    async function loadFromServer(){
+      try{
+        const namesRes = await fetch('/get_all_hw_names', { method: 'POST' });
+        const namesJson = await namesRes.json();
+        if(namesRes.ok && namesJson && namesJson.success && Array.isArray(namesJson.data)){
+          const names = namesJson.data;
+          const hwPromises = names.map(n=> fetch('/get_hw_info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: n }) }).then(r=>r.json()).catch(()=>null));
+          const hwResults = await Promise.all(hwPromises);
+          const normalized = hwResults.filter(h => h && h.success && h.data).map(h => ({ id: h.data.hwName, name: h.data.hwName, capacity: h.data.capacity, available: h.data.availability, description: '' }));
+          if(normalized.length>0){
+            setHardware(normalized);
+            return;
+          }
+        }
+      }catch(e){
+        // server not available or failed, fall back to local
+      }
+      setHardware(loadHardware());
+    }
+    loadFromServer();
   },[]);
 
   const add = (e)=>{
     e.preventDefault();
     if(!name) return;
-    createHardware(name, capacity, description);
-    setHardware(loadHardware());
+    const entry = createHardware(name, capacity, description);
+    // show created hardware immediately in UI
+    setHardware(prev => [...prev, { id: entry.id, name: entry.name, capacity: entry.capacity, available: entry.available, description: entry.description }]);
     setName('');setCapacity(1);setDescription('');
   };
 
@@ -26,7 +47,7 @@ export default function HardwareList(){
         {hardware.map(h=> (
           <div key={h.id} className="card project-item">
             <h4>{h.name}</h4>
-            <div>Available: {h.available} / {h.capacity}</div>
+            <div>Available: {typeof h.available !== 'undefined' ? h.available : (h.availability ?? 'N/A')} / {h.capacity}</div>
             <div style={{marginTop:6}}>{h.description}</div>
           </div>
         ))}
