@@ -20,7 +20,12 @@ export default function MyUserPortal(){
   const [projects,setProjects] = useState([]);
   const [name,setName] = useState('');
   const [desc,setDesc] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [user, setUser] = useState(loadCurrentUser());
+  const [createMessage, setCreateMessage] = useState('');
+  const [createError, setCreateError] = useState(false);
+  const [portalMessage, setPortalMessage] = useState('');
+  const [portalError, setPortalError] = useState(false);
   const [selectedOtherProject, setSelectedOtherProject] = useState('');
   const [creating,setCreating] = useState(false);
   const [joining,setJoining] = useState(''); // project id being joined
@@ -56,44 +61,62 @@ export default function MyUserPortal(){
 
   const create = (e)=>{
     e.preventDefault();
-    const cur = loadCurrentUser();
-    if(!cur){ alert('Please login'); return; }
-    if(!name) { alert('Please provide a project name'); return; }
-    setCreating(true);
+  const cur = loadCurrentUser();
+  // clear previous messages
+  setCreateMessage(''); setCreateError(false);
+  if(!cur){ setCreateMessage('Please login'); setCreateError(true); return; }
+  if(!name) { setCreateMessage('Please provide a project name'); setCreateError(true); return; }
+  if(projectId && /\s/.test(projectId)) { setCreateMessage('Project id cannot contain spaces'); setCreateError(true); return; }
+  setCreating(true);
     // Post to backend to create project
     fetch('/create_project', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: cur.username, name, description: desc })
+      body: JSON.stringify({ username: cur.username, name, description: desc, project_id: projectId || undefined })
     })
-    .then(r=>r.json())
-    .then(json=>{
+    .then(async r=>{
+      const json = await r.json().catch(()=>null);
+      if(!r.ok){
+        if(r.status===409){
+          setCreateMessage(json && json.message ? json.message : 'Project id already exists');
+        } else {
+          setCreateMessage(json && json.message ? json.message : 'Create failed');
+        }
+        setCreateError(true);
+        setCreating(false);
+        return;
+      }
       if(json && json.success && json.data){
         // refresh projects from server (server returns new project but we'll reload authoritative list)
         fetchProjects().then(()=>{
           // ensure current user reflects membership if server tracks it
           const updatedCur = loadCurrentUser();
           if(updatedCur){ setUser(updatedCur); }
-          setName(''); setDesc('');
+          setName(''); setDesc(''); setProjectId('');
           setSelectedOtherProject('');
           setCreating(false);
-          alert('Project created');
+          setCreateMessage('Project created');
+          setCreateError(false);
+          // auto-hide success after a few seconds
+          setTimeout(()=>setCreateMessage(''), 3000);
         });
       } else {
-        alert(json && json.message ? json.message : 'Create failed');
+        setCreateMessage(json && json.message ? json.message : 'Create failed');
+        setCreateError(true);
         setCreating(false);
       }
     })
     .catch(err=>{
       console.error('Create project error', err);
-      alert('Network error');
+      setCreateMessage('Network error'); setCreateError(true);
       setCreating(false);
     });
   };
 
   const join = (projectId)=>{
     const cur = loadCurrentUser();
-    if(!cur) return alert('Please login');
+    if(!cur){ setPortalMessage('Please login'); setPortalError(true); return; }
+    setPortalMessage(''); setPortalError(false);
     setJoining(projectId);
     // ask backend to add user to project
     fetch('/join_project', {
@@ -106,23 +129,25 @@ export default function MyUserPortal(){
       if(json && json.success){
         // refresh projects list to see updated authorized_users
         fetchProjects();
-        alert('Joined project');
+        setPortalMessage('Joined project'); setPortalError(false);
+        setTimeout(()=>setPortalMessage(''), 3000);
         setJoining('');
       } else {
-        alert(json && json.message ? json.message : 'Join failed');
+        setPortalMessage(json && json.message ? json.message : 'Join failed'); setPortalError(true);
         setJoining('');
       }
     })
     .catch(err=>{
       console.error('Join error', err);
-      alert('Network error');
+      setPortalMessage('Network error'); setPortalError(true);
       setJoining('');
     });
   };
 
   const leave = (projectId)=>{
     const cur = loadCurrentUser();
-    if(!cur) return alert('Please login');
+    if(!cur){ setPortalMessage('Please login'); setPortalError(true); return; }
+    setPortalMessage(''); setPortalError(false);
     setLeaving(projectId);
     // ask backend to remove user from project
     fetch('/leave_project', {
@@ -135,16 +160,17 @@ export default function MyUserPortal(){
       if(json && json.success){
         // refresh projects to see updated authorized_users
         fetchProjects();
-        alert('Left project');
+        setPortalMessage('Left project'); setPortalError(false);
+        setTimeout(()=>setPortalMessage(''), 3000);
         setLeaving('');
       } else {
-        alert(json && json.message ? json.message : 'Leave failed');
+        setPortalMessage(json && json.message ? json.message : 'Leave failed'); setPortalError(true);
         setLeaving('');
       }
     })
     .catch(err=>{
       console.error('Leave error', err);
-      alert('Network error');
+      setPortalMessage('Network error'); setPortalError(true);
       setLeaving('');
     });
   };
@@ -159,10 +185,19 @@ export default function MyUserPortal(){
 
       <section className="card" style={{marginBottom:12}}>
         <h3>Create Project</h3>
+        {createMessage && (
+          <div style={{padding:8, marginBottom:8, borderRadius:4, backgroundColor: createError ? '#f8d7da' : '#d4edda', color: createError ? '#721c24' : '#155724', border: '1px solid', borderColor: createError ? '#f5c6cb' : '#c3e6cb'}}>
+            {createMessage}
+          </div>
+        )}
         <form onSubmit={create}>
           <div className="form-row">
             <label>Project name</label>
             <input value={name} onChange={e=>setName(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Project ID (optional)</label>
+            <input value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="custom-project-id (no spaces)" />
           </div>
           <div className="form-row">
             <label>Description</label>
@@ -194,6 +229,11 @@ export default function MyUserPortal(){
 
       <section style={{marginTop:18}}>
         <h3>Other Available Projects</h3>
+        {portalMessage && (
+          <div style={{padding:8, marginBottom:8, borderRadius:4, backgroundColor: portalError ? '#f8d7da' : '#d4edda', color: portalError ? '#721c24' : '#155724', border: '1px solid', borderColor: portalError ? '#f5c6cb' : '#c3e6cb'}}>
+            {portalMessage}
+          </div>
+        )}
         <div className="card" style={{padding:12}}>
           {otherProjects.length===0 ? (
             <div>No other projects available.</div>
@@ -206,7 +246,7 @@ export default function MyUserPortal(){
                 ))}
               </select>
               <button className="btn btn-primary" onClick={()=>{
-                if(!selectedOtherProject) return alert('Please select a project');
+                if(!selectedOtherProject){ setPortalMessage('Please select a project'); setPortalError(true); return; }
                 join(selectedOtherProject);
                 setSelectedOtherProject('');
               }} disabled={!!joining}>
