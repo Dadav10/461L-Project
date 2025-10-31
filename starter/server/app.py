@@ -1,6 +1,6 @@
 # Import necessary libraries and modules
 from bson.objectid import ObjectId
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_pymongo import PyMongo
 import threading
@@ -16,9 +16,13 @@ mongo = PyMongo()
 mongo.init_app(app)
 CORS(app)
 
-@app.route('/')
-def index():
-    return "Server is running"
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists("client/build/" + path):
+        return send_from_directory('client/build', path)
+    else:
+        return send_from_directory('client/build', 'index.html')
 
 # Warm up MongoDB connection in background to reduce first-request latency
 def warmup_mongo(retries=3, delay=1.0):
