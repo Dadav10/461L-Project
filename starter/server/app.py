@@ -16,6 +16,10 @@ mongo = PyMongo()
 mongo.init_app(app)
 CORS(app)
 
+@app.route('/')
+def index():
+    return "Server is running"
+
 # Warm up MongoDB connection in background to reduce first-request latency
 def warmup_mongo(retries=3, delay=1.0):
     """Attempt to ping MongoDB a few times in background. Non-blocking."""
