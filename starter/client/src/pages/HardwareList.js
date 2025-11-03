@@ -34,10 +34,24 @@ export default function HardwareList(){
   const add = (e)=>{
     e.preventDefault();
     if(!name) return;
-    const entry = createHardware(name, capacity, description);
-    // show created hardware immediately in UI
-    setHardware(prev => [...prev, { id: entry.id, name: entry.name, capacity: entry.capacity, available: entry.available, description: entry.description }]);
-    setName('');setCapacity(1);setDescription('');
+    // ask server to create global hardware set; fall back to localStorage helper if server unavailable
+    fetch('/create_hardware_set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: name, capacity }) })
+      .then(r=>r.json())
+      .then(json=>{
+        if(json && json.success && json.data){
+          const h = { id: json.data.hwName, name: json.data.hwName, capacity: json.data.capacity, available: json.data.availability, description };
+          setHardware(prev => [...prev, h]);
+        } else {
+          // fallback to local creation
+          const entry = createHardware(name, capacity, description);
+          setHardware(prev => [...prev, { id: entry.id, name: entry.name, capacity: entry.capacity, available: entry.available, description: entry.description }]);
+        }
+      })
+      .catch(()=>{
+        const entry = createHardware(name, capacity, description);
+        setHardware(prev => [...prev, { id: entry.id, name: entry.name, capacity: entry.capacity, available: entry.available, description: entry.description }]);
+      })
+      .finally(()=>{ setName(''); setCapacity(1); setDescription(''); });
   };
 
   return (

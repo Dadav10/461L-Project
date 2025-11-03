@@ -56,6 +56,7 @@ def login():
     # Return limited user info expected by client (do NOT return the password)
     user_safe = {
         "username": existing_user.get("username"),
+        "user_id": existing_user.get("user_id"),
         "projects": existing_user.get("projects", [])
     }
     return jsonify({"success": True, "data": user_safe}), 200
@@ -79,18 +80,25 @@ def register():
     if existing_user:
         return jsonify({"success": False, "message": "Username already exists"}), 409
     
-    # Create new user document
+    # Create new user document; generate a unique user_id
+    try:
+        generated_id = str(ObjectId())
+    except Exception:
+        generated_id = username + '_' + str(int(time.time()))
+
     new_user = {
         "username": username,
         "password": password,
         "security_question": security_question,
         "security_answer": security_answer,
-        "projects": []
+        "projects": [],
+        "user_id": generated_id
     }
 
     # Insert new user into the database
     mongo.db.user_info.insert_one(new_user)
-    return jsonify({"success": True, "message": "User registered successfully"}), 201
+    # return user_id so client can encrypt and store it as needed
+    return jsonify({"success": True, "data": {"user_id": generated_id}}), 201
         
 # Route for password retrieval
 @app.route('/forgot/lookup', methods=['POST'])
@@ -180,11 +188,14 @@ def get_all_projects():
 
 
 # Route for getting the list of user projects
-@app.route('/get_user_projects_list', methods=['GET'])
+@app.route('/get_user_projects_list', methods=['POST'])
 def get_user_projects_list():
     # Extract data from request
-    data = request.json
+    data = request.json or {}
     username = data.get('username')
+
+    if not username:
+        return jsonify({"success": False, "message": "username required"}), 400
 
     # Fetch the user's projects using the usersDB module
     user = mongo.db.user_info.find_one({"username": username})
@@ -194,6 +205,32 @@ def get_user_projects_list():
 
     # Return a JSON response
     return jsonify({"success": True, "data": user_projects}), 200
+
+
+@app.route('/get_rejoin_candidates', methods=['POST'])
+def get_rejoin_candidates():
+    data = request.json or {}
+    username = data.get('username')
+    if not username:
+        return jsonify({"success": False, "message": "username required"}), 400
+
+    # Fetch user to know which projects they currently have in their personal list
+    user = mongo.db.user_info.find_one({"username": username})
+    if not user:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    user_projects = set(str(pid) for pid in user.get('projects', []))
+
+    try:
+        # Find projects where this username is in authorized_users
+        cursor = mongo.db.projects.find({"authorized_users": username}, {"name": 1})
+        candidates = []
+        for p in cursor:
+            pid_str = str(p.get('_id'))
+            if pid_str not in user_projects:
+                candidates.append({"id": pid_str, "name": p.get('name')})
+        return jsonify({"success": True, "data": candidates}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Route for creating a new project
 @app.route('/create_project', methods=['POST'])
@@ -215,23 +252,26 @@ def create_project():
         else:
             new_id = ObjectId()
 
-        # Attempt to create the project
+        # Attempt to create the project (DO NOT embed hardware here).
+        # Projects reference global hardware sets via their names when checking out/in.
         new_project = {
             "name": project_name,
             "_id": new_id,
             "description": project_description,
             "authorized_users": [],
-            # embed hardware sets per-project so hardware is tied to the project
-            "hardware": [
-                {"hwName": "Hardware Set 1", "capacity": 100, "availability": 100},
-                {"hwName": "Hardware Set 2", "capacity": 100, "availability": 100}
-            ]
+            # track total usage per hardware name across this project
+            "usage": {}
         }
         new_project["authorized_users"].append(user)
 
         mongo.db.projects.insert_one(new_project)
 
-        # hardware seeded per-project above; no global seeding needed
+        # add project id to the creating user's project list
+        try:
+            stored_id = str(new_id)
+        except Exception:
+            stored_id = new_id
+        mongo.db.user_info.update_one({"username": user}, {"$addToSet": {"projects": stored_id}})
 
         # convert ObjectId to string for response if needed
         resp = new_project.copy()
@@ -260,12 +300,19 @@ def join_project():
         project = mongo.db.projects.find_one({"_id": project_id})
     if not project:
         return jsonify({"success": False, "message": f"Project {project_id} not found"}), 404
+    # If user not in authorized_users, add them; regardless, ensure user's project list contains this project
     if username not in project.get('authorized_users', []):
         # update using the same _id type as found
         mongo.db.projects.update_one(
             {"_id": project.get('_id')},
             {"$push": {"authorized_users": username}}
         )
+    # always add project id to user's project list so the user sees it in their portal
+    try:
+        pid = str(project.get('_id'))
+    except Exception:
+        pid = project.get('_id')
+    mongo.db.user_info.update_one({"username": username}, {"$addToSet": {"projects": pid}})
     # Return a JSON response
     return jsonify({"success": True, "message": "User added to project"}), 200
 
@@ -285,11 +332,13 @@ def leave_project():
         project = mongo.db.projects.find_one({"_id": project_id})
     if not project:
         return jsonify({"success": False, "message": "Project not found"}), 404
-    if username in project.get('authorized_users', []):
-        mongo.db.projects.update_one(
-            {"_id": project.get('_id')},
-            {"$pull": {"authorized_users": username}}
-        )
+    # Do NOT remove the user from the project's authorized_users so they can rejoin later.
+    # Only remove the project id from the user's personal project list so it disappears from their portal.
+    try:
+        pid = str(project.get('_id'))
+    except Exception:
+        pid = project.get('_id')
+    mongo.db.user_info.update_one({"username": username}, {"$pull": {"projects": pid}})
     # Return a JSON response
     return jsonify({"success": True, "message": "User removed from project"}), 200
 
@@ -318,32 +367,23 @@ def get_project_info():
 
     # convert ObjectId to string for JSON
     project['_id'] = str(project['_id'])
-    # ensure usage and user_usage fields exist
+    # ensure usage field exists
     if 'usage' not in project:
         project['usage'] = project.get('usage', {})
-    if 'user_usage' not in project:
-        project['user_usage'] = project.get('user_usage', {})
 
-    # fetch hardware sets from within the project (hardware is per-project)
-    hardware = project.get('hardware', [])
+    # For the project view we do NOT include embedded hardware. Hardware is global.
+    # Client may call /get_hw_info or /get_all_hw_names to learn about global hardware sets.
+    hardware = []
 
-    # if username provided, also surface only that user's usage for convenience
-    user_usage = {}
-    if username:
-        user_usage = project.get('user_usage', {}).get(username, {})
-
-    return jsonify({"success": True, "data": {"project": project, "hardware": hardware, "user_usage": user_usage}}), 200
+    # Return project and its aggregate usage only. Do not expose per-user tracking.
+    return jsonify({"success": True, "data": {"project": project, "hardware": hardware, "usage": project.get('usage', {})}}), 200
 
 # Route for getting all hardware names
 @app.route('/get_all_hw_names', methods=['POST'])
 def get_all_hw_names():
     try:
-        # aggregate distinct hwNames from projects' embedded hardware arrays
-        names_set = set()
-        for proj in mongo.db.projects.find({}, { 'hardware': 1, '_id': 0 }):
-            for h in proj.get('hardware', []):
-                names_set.add(h.get('hwName'))
-        names = list(names_set)
+        # Read global hardware set names from hardware_sets collection
+        names = [doc['hwName'] for doc in mongo.db.hardware_sets.find({}, { 'hwName': 1, '_id': 0 })]
         return jsonify({"success": True, "data": names}), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -353,30 +393,15 @@ def get_all_hw_names():
 def get_hw_info():
     data = request.json or {}
     hwName = data.get('hwName')
-    project_id = data.get('project_id')
     if not hwName:
         return jsonify({"success": False, "message": "hwName required"}), 400
-    # find hw info inside a project (prefer project_id if provided)
-    hw_item = None
-    if project_id:
-        try:
-            proj = mongo.db.projects.find_one({"_id": ObjectId(project_id)}, {"hardware": 1})
-        except Exception:
-            proj = mongo.db.projects.find_one({"_id": project_id}, {"hardware": 1})
-        if proj:
-            for h in proj.get('hardware', []):
-                if h.get('hwName') == hwName:
-                    hw_item = h
-                    break
-    else:
-        # search across projects for the hwName
-        proj = mongo.db.projects.find_one({"hardware.hwName": hwName}, {"hardware.$": 1})
-        if proj and proj.get('hardware'):
-            hw_item = proj['hardware'][0]
-
-    if not hw_item:
-        return jsonify({"success": False, "message": "Hardware not found"}), 404
-    return jsonify({"success": True, "data": {"hwName": hw_item.get('hwName'), "capacity": hw_item.get('capacity'), "availability": hw_item.get('availability')}}), 200
+    try:
+        hw = mongo.db.hardware_sets.find_one({"hwName": hwName})
+        if not hw:
+            return jsonify({"success": False, "message": "Hardware not found"}), 404
+        return jsonify({"success": True, "data": {"hwName": hw.get('hwName'), "capacity": hw.get('capacity'), "availability": hw.get('availability')}}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Route for checking out hardware
 @app.route('/check_out', methods=['POST'])
@@ -396,27 +421,39 @@ def check_out():
     except Exception:
         return jsonify({"success": False, "message": "amount must be a positive integer"}), 400
 
-    # find hardware
-    # find project and ensure the requested hardware exists with enough availability
+    # Use global hardware_sets collection for availability checks and updates
     try:
-        proj_query = {"_id": ObjectId(project_id), "hardware": {"$elemMatch": {"hwName": hwName, "availability": {"$gte": amount}}}}
-    except Exception:
-        proj_query = {"_id": project_id, "hardware": {"$elemMatch": {"hwName": hwName, "availability": {"$gte": amount}}}}
+        hw = mongo.db.hardware_sets.find_one({"hwName": hwName})
+        if not hw:
+            return jsonify({"success": False, "message": "Hardware not found"}), 404
+        if hw.get('availability', 0) < amount:
+            return jsonify({"success": False, "message": "Insufficient global hardware available"}), 400
 
-    update = {"$inc": {f"hardware.$.availability": -amount, f"usage.{hwName}": amount, f"user_usage.{username}.{hwName}": amount}}
-    res = mongo.db.projects.update_one(proj_query, update)
-    if res.modified_count == 0:
-        # either project/hardware not found or insufficient availability
-        # check whether project exists
+        # decrement global availability first
+        res_hw = mongo.db.hardware_sets.update_one({"hwName": hwName, "availability": {"$gte": amount}}, {"$inc": {"availability": -amount}})
+        if res_hw.modified_count == 0:
+            return jsonify({"success": False, "message": "Insufficient global hardware available"}), 400
+
+        # then increment project usage and per-user usage
         try:
-            exists = mongo.db.projects.find_one({"_id": ObjectId(project_id)})
+            proj_query = {"_id": ObjectId(project_id)}
         except Exception:
-            exists = mongo.db.projects.find_one({"_id": project_id})
-        if not exists:
-            return jsonify({"success": False, "message": "Project not found"}), 404
-        return jsonify({"success": False, "message": "Insufficient hardware available or hardware not found in project"}), 400
+            proj_query = {"_id": project_id}
 
-    return jsonify({"success": True, "message": "Checked out hardware"}), 200
+        update = {"$inc": {f"usage.{hwName}": amount}}
+        proj_res = mongo.db.projects.update_one(proj_query, update)
+        if proj_res.modified_count == 0:
+            # try to revert global change
+            mongo.db.hardware_sets.update_one({"hwName": hwName}, {"$inc": {"availability": amount}})
+            # determine whether project exists
+            exists = mongo.db.projects.find_one(proj_query)
+            if not exists:
+                return jsonify({"success": False, "message": "Project not found"}), 404
+            return jsonify({"success": False, "message": "Failed to update project usage"}), 500
+
+        return jsonify({"success": True, "message": "Checked out hardware"}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Route for checking in hardware
 @app.route('/check_in', methods=['POST'])
@@ -436,53 +473,71 @@ def check_in():
     except Exception:
         return jsonify({"success": False, "message": "amount must be a positive integer"}), 400
 
-    # find project current usage and validate
+    # Validate project exists
     try:
-        proj = mongo.db.projects.find_one({"_id": ObjectId(project_id)})
+        proj_query = {"_id": ObjectId(project_id)}
     except Exception:
-        proj = mongo.db.projects.find_one({"_id": project_id})
+        proj_query = {"_id": project_id}
+
+    proj = mongo.db.projects.find_one(proj_query)
     if not proj:
         return jsonify({"success": False, "message": "Project not found"}), 404
-    # check per-user current usage first
-    user_current = proj.get('user_usage', {}).get(username, {}).get(hwName, 0)
-    if user_current < amount:
-        return jsonify({"success": False, "message": "Cannot return more than the user has checked out"}), 400
 
-    # ensure hardware exists in project and that availability won't exceed capacity
-    hw_item = None
-    for h in proj.get('hardware', []):
-        if h.get('hwName') == hwName:
-            hw_item = h
-            break
-    if not hw_item:
-        return jsonify({"success": False, "message": "Hardware not found in project"}), 404
-    if hw_item.get('availability', 0) + amount > hw_item.get('capacity', 0):
+    # Check overall project total for this hardware
+    project_total = proj.get('usage', {}).get(hwName, 0)
+    if project_total < amount:
+        return jsonify({"success": False, "message": "Cannot return more than the project has checked out"}), 400
+
+    # Check hardware set exists and that returning won't exceed capacity
+    hw = mongo.db.hardware_sets.find_one({"hwName": hwName})
+    if not hw:
+        return jsonify({"success": False, "message": "Hardware set not found"}), 404
+    if hw.get('availability', 0) + amount > hw.get('capacity', 0):
         return jsonify({"success": False, "message": "Return would exceed hardware capacity"}), 400
 
-    # decrement project user usage and increment embedded hardware availability
+    # decrement project usage, then increment global availability
     try:
-        res = mongo.db.projects.update_one({"_id": ObjectId(project_id), "hardware.hwName": hwName}, {"$inc": {f"hardware.$.availability": amount, f"usage.{hwName}": -amount, f"user_usage.{username}.{hwName}": -amount}})
-    except Exception:
-        res = mongo.db.projects.update_one({"_id": project_id, "hardware.hwName": hwName}, {"$inc": {f"hardware.$.availability": amount, f"usage.{hwName}": -amount, f"user_usage.{username}.{hwName}": -amount}})
+        proj_update = mongo.db.projects.update_one(proj_query, {"$inc": {f"usage.{hwName}": -amount}})
+        if proj_update.modified_count == 0:
+            return jsonify({"success": False, "message": "Failed to update project usage"}), 500
 
-    if res.modified_count == 0:
-        return jsonify({"success": False, "message": "Failed to check in hardware"}), 500
+        # increment global availability
+        hw_res = mongo.db.hardware_sets.update_one({"hwName": hwName, "availability": {"$lte": hw.get('capacity', 0) - amount}}, {"$inc": {"availability": amount}})
+        if hw_res.modified_count == 0:
+            # try to revert project update
+            mongo.db.projects.update_one(proj_query, {"$inc": {f"usage.{hwName}": amount}})
+            return jsonify({"success": False, "message": "Failed to update hardware availability"}), 500
 
-    return jsonify({"success": True, "message": "Checked in hardware"}), 200
+        return jsonify({"success": True, "message": "Checked in hardware"}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Route for creating a new hardware set
 @app.route('/create_hardware_set', methods=['POST'])
 def create_hardware_set():
-    # Extract data from request
+    data = request.json or {}
+    hwName = data.get('hwName')
+    capacity = data.get('capacity')
+    if not hwName or capacity is None:
+        return jsonify({"success": False, "message": "hwName and capacity required"}), 400
+    try:
+        capacity = int(capacity)
+        if capacity <= 0:
+            raise ValueError()
+    except Exception:
+        return jsonify({"success": False, "message": "capacity must be a positive integer"}), 400
 
-    # Connect to MongoDB
+    # Check if hardware set already exists
+    existing = mongo.db.hardware_sets.find_one({"hwName": hwName})
+    if existing:
+        return jsonify({"success": False, "message": "Hardware set already exists"}), 409
 
-    # Attempt to create the hardware set using the hardwareDB module
-
-    # Close the MongoDB connection
-
-    # Return a JSON response
-    return jsonify({})
+    hw_doc = {"hwName": hwName, "capacity": capacity, "availability": capacity}
+    try:
+        mongo.db.hardware_sets.insert_one(hw_doc)
+        return jsonify({"success": True, "data": {"hwName": hwName, "capacity": capacity, "availability": capacity}}), 201
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Route for checking the inventory of projects
 @app.route('/api/inventory', methods=['GET'])

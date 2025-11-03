@@ -29,8 +29,19 @@ export default function ProjectDetails(){
     .then(json=>{
       if(json && json.success && json.data){
         setProject(json.data.project);
-        setHardware(json.data.hardware || []);
-        setUserUsage(json.data.user_usage || {});
+        // fetch global hardware info
+        fetch('/get_all_hw_names', { method: 'POST' }).then(r=>r.json()).then(namesJson=>{
+          if(namesJson && namesJson.success && Array.isArray(namesJson.data)){
+            const names = namesJson.data;
+            return Promise.all(names.map(n => fetch('/get_hw_info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: n }) }).then(r=>r.json()).catch(()=>null)));
+          }
+          return [];
+        }).then(hwResults =>{
+          const normalized = (hwResults || []).filter(h => h && h.success && h.data).map(h => ({ hwName: h.data.hwName, capacity: h.data.capacity, availability: h.data.availability }));
+          setHardware(normalized);
+        }).catch(()=>{ setHardware([]); });
+  // server now returns aggregate usage in json.data.usage
+  setUserUsage(json.data.usage || (json.data.project && json.data.project.usage) || {});
       } else {
         setProject(null);
         setHardware([]);
@@ -70,8 +81,18 @@ export default function ProjectDetails(){
     .then(json=>{
       if(json && json.success && json.data){
         setProject(json.data.project);
-        setHardware(json.data.hardware || []);
-        setUserUsage(json.data.user_usage || {});
+        // refresh global hardware availability
+        fetch('/get_all_hw_names', { method: 'POST' }).then(r=>r.json()).then(namesJson=>{
+          if(namesJson && namesJson.success && Array.isArray(namesJson.data)){
+            const names = namesJson.data;
+            return Promise.all(names.map(n => fetch('/get_hw_info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: n }) }).then(r=>r.json()).catch(()=>null)));
+          }
+          return [];
+        }).then(hwResults =>{
+          const normalized = (hwResults || []).filter(h => h && h.success && h.data).map(h => ({ hwName: h.data.hwName, capacity: h.data.capacity, availability: h.data.availability }));
+          setHardware(normalized);
+        }).catch(()=>{ setHardware([]); });
+  setUserUsage(json.data.usage || (json.data.project && json.data.project.usage) || {});
         setPdMessage('Request successful'); setPdError(false);
         setTimeout(()=>setPdMessage(''), 3000);
       }
@@ -114,8 +135,18 @@ export default function ProjectDetails(){
     .then(json=>{
       if(json && json.success && json.data){
         setProject(json.data.project);
-        setHardware(json.data.hardware || []);
-        setUserUsage(json.data.user_usage || {});
+        // refresh global hardware availability
+        fetch('/get_all_hw_names', { method: 'POST' }).then(r=>r.json()).then(namesJson=>{
+          if(namesJson && namesJson.success && Array.isArray(namesJson.data)){
+            const names = namesJson.data;
+            return Promise.all(names.map(n => fetch('/get_hw_info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: n }) }).then(r=>r.json()).catch(()=>null)));
+          }
+          return [];
+        }).then(hwResults =>{
+          const normalized = (hwResults || []).filter(h => h && h.success && h.data).map(h => ({ hwName: h.data.hwName, capacity: h.data.capacity, availability: h.data.availability }));
+          setHardware(normalized);
+        }).catch(()=>{ setHardware([]); });
+  setUserUsage(json.data.usage || (json.data.project && json.data.project.usage) || {});
         setPdMessage('Return successful'); setPdError(false);
         setTimeout(()=>setPdMessage(''), 3000);
       }
@@ -129,6 +160,8 @@ export default function ProjectDetails(){
     });
   };
 
+  const cur = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
   return (
     <div>
       <h2>{project.name}</h2>
@@ -137,6 +170,7 @@ export default function ProjectDetails(){
           {pdMessage}
         </div>
       )}
+
       <div className="card">
         <p>{project.description}</p>
         <h4>Project usage</h4>
@@ -147,17 +181,20 @@ export default function ProjectDetails(){
             return (
               <ul>
                 {entries.map(([hwId,amt])=> (
-                  <li key={hwId}><strong>{hwId}</strong> — <em>{amt}</em> {
-                    returningHw === hwId ? (
-                      <span style={{display:'inline-flex',gap:8,alignItems:'center'}}>
-                        <input type="number" value={returnAmount} onChange={e=>setReturnAmount(e.target.value)} style={{width:80}} />
-                        <button onClick={()=>doReturnConfirm(hwId)}>Confirm</button>
-                        <button onClick={doReturnCancel}>Cancel</button>
-                      </span>
-                    ) : (
-                      <button onClick={()=>doReturnStart(hwId)}>Return</button>
-                    )
-                  }</li>
+                  <li key={hwId}>
+                    <strong>{hwId}</strong> — <em>{amt}</em>
+                    {cur ? (
+                      returningHw === hwId ? (
+                        <span style={{display:'inline-flex',gap:8,alignItems:'center', marginLeft:12}}>
+                          <input type="number" value={returnAmount} onChange={e=>setReturnAmount(e.target.value)} style={{width:80}} />
+                          <button onClick={()=>doReturnConfirm(hwId)}>Confirm</button>
+                          <button onClick={doReturnCancel}>Cancel</button>
+                        </span>
+                      ) : (
+                        <button style={{marginLeft:12}} onClick={()=>doReturnStart(hwId)}>Return</button>
+                      )
+                    ) : null}
+                  </li>
                 ))}
               </ul>
             );

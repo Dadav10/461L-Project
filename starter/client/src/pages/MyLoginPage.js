@@ -52,8 +52,14 @@ export default function MyLoginPage(){
     .then(json => {
       if(json && json.success){
         // persist minimal user info (username) so header can show logout
-        if(json.data && json.data.username){
-          localStorage.setItem('currentUser', JSON.stringify({ username: json.data.username }));
+        if(json.data){
+          const stored = { username: json.data.username };
+          if(json.data.user_id){
+            try{
+              stored.encryptedUserId = encrypt(String(json.data.user_id), 5, 1);
+            }catch(e){ /* swallow encryption error */ }
+          }
+          localStorage.setItem('currentUser', JSON.stringify(stored));
         }
         navigate('/portal');
       } else {

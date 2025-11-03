@@ -45,7 +45,8 @@ Follow these simple steps to set up and run the project:
 461L-Project/
 ├── starter/
 │   ├── client/                 # React frontend application
-│   │   ├── public/
+│   │   ├── build/              # Production build output
+│   │   ├── public/             # Public assets
 │   │   ├── src/
 │   │   │   ├── components/     # React components
 │   │   │   └── pages/          # Page components
@@ -63,26 +64,6 @@ Follow these simple steps to set up and run the project:
 └── README.md                   # This file
 ```
 
-## Architecture
-
-### Backend (Python/Flask)
-The backend uses an **inheritance-based architecture** with MongoDB:
-
-- **`MongoDB`** (Base Class): Handles connection management and implements Singleton pattern
-- **`UsersDatabase`**: Inherits from MongoDB, manages user registration, authentication, and project assignments
-- **`HardwareDatabase`**: Inherits from MongoDB, manages hardware sets, availability, and requests
-- **`ProjectsDatabase`**: Inherits from MongoDB, manages projects, user assignments, and hardware checkout/checkin
-
-### Frontend (React)
-- User authentication pages (login, registration, password recovery)
-- User portal for project and hardware management
-- Project and checkout components
-
-### Database Collections
-- **`user_info`**: User credentials and project associations
-- **`projects`**: Project details, hardware usage, and user lists
-- **`hardware_sets`**: Hardware inventory with capacity and availability
-
 ## Usage
 
 ### Running the Backend
@@ -97,69 +78,48 @@ cd starter/client
 npm start
 ```
 
-### Database Classes Usage Example
-```python
-from usersDatabase import UsersDatabase
-from hardwareDatabase import HardwareDatabase
-from projectsDatabase import ProjectsDatabase
+Environment
 
-# Create instances (all share the same MongoDB connection)
-users_db = UsersDatabase()
-hardware_db = HardwareDatabase()
-projects_db = ProjectsDatabase()
+- The MongoDB connection string is currently embedded in `starter/server/app.py` for demo purposes. For production, store the connection URI in an environment variable and don't commit credentials.
 
-# User management
-users_db.addUser("john_doe", "user001", "password123")
-users_db.login("john_doe", "user001", "password123")
+## Key backend endpoints (short summary)
 
-# Hardware management
-hardware_db.createHardwareSet("Arduino Uno", 50)
-hardware_db.requestSpace("Arduino Uno", 10)
+All endpoints are implemented in `starter/server/app.py` — check that file for exact request/response JSON shapes.
 
-# Project management
-projects_db.createProject("IoT Project", "proj001", "Smart home system")
-projects_db.addUser("proj001", "user001")
-projects_db.checkOutHW("proj001", "Arduino Uno", 5, "user001")
-```
+- POST /register — register a new user. Returns generated `user_id`.
+- POST /login — login; returns limited user object (username, user_id, projects).
+- POST /forgot/lookup — start forgot-password flow; returns the user's security question.
+- POST /forgot/verify — verify security answer (demo may return stored password in response).
+- POST /forgot/reset — reset password (client encrypts new password in this demo before sending).
+- POST /get_all_projects — return all projects (used for debugging/admin).
+- POST /get_user_projects_list — return the list of project ids for a username (what appears in the user's portal).
+- POST /get_rejoin_candidates — return projects where the user is authorized but has left (so they can rejoin).
+- POST /create_project — create a project; newly created project is added to the creating user's project list.
+- POST /join_project — add the username to a project's authorized_users and add the project id to the user's project list.
+- POST /leave_project — remove the project id from the user's personal project list (does not remove the username from project's authorized_users so they can rejoin later).
+- POST /get_project_info — returns the project document and aggregate `usage` mapping (hwName -> amount).
+- POST /get_all_hw_names — list all hardware set names.
+- POST /get_hw_info — return capacity and availability for a hardware set.
+- POST /create_hardware_set — create a new global hardware set (hwName, capacity).
+- POST /check_out — check out hardware: decrement `hardware_sets.availability` and increment `projects.usage[hwName]`.
+- POST /check_in — check in hardware: decrement `projects.usage[hwName]` and increment `hardware_sets.availability`. Any authorized project member may check in; per-user ownership is not tracked.
 
-## Features
+## Data model (current)
 
-### User Management
-- User registration and authentication
-- Project membership management
-- User project lists
+- user_info
+   - username: string
+   - password: string (client-encrypted string in this demo)
+   - security_question, security_answer (demo plaintext)
+   - projects: array of project ids (strings)
+   - user_id: server-generated string id
 
-### Hardware Management
-- Hardware set creation and management
-- Availability tracking
-- Hardware space requests
+- projects
+   - _id: project id (ObjectId or string)
+   - name, description
+   - authorized_users: array of usernames
+   - usage: object mapping hwName -> integer (aggregate checked-out amount)
 
-### Project Management
-- Project creation and management
-- User-project associations
-- Hardware checkout/checkin system
-- Usage tracking per project
-
-
-## Troubleshooting
-
-- If you encounter permission issues with `startup.sh`, run: `chmod +x startup.sh`
-- Make sure you have Python 3.7+ installed: `python --version`
-- If MongoDB connection fails, check your internet connection and MongoDB Atlas credentials
-- For React frontend issues, ensure Node.js and npm are properly installed
-- If inheritance tests fail, verify all database files are in the `starter/server/` directory
-
-- Activation note: to have the virtual environment activated in your interactive shell, source the script rather than executing it:
-
-```bash
-source startup.sh
-```
-
-On Windows using PowerShell, activate the virtual environment with:
-
-```powershell
-# from the repository root (PowerShell)
-.\.env\Scripts\Activate.ps1
-```
-
-If you're using Git Bash or WSL on Windows, the `source` commands above will work there.
+- hardware_sets
+   - hwName: string (unique)
+   - capacity: int
+   - availability: int (remaining available units)

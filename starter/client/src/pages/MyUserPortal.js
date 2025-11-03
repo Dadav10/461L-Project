@@ -1,4 +1,5 @@
 import React, {useState, useEffect} from 'react';
+import { useNavigate } from 'react-router-dom';
 import Project from '../components/Project';
 
 // Projects are now fetched from backend; localStorage-backed helpers removed
@@ -22,33 +23,83 @@ export default function MyUserPortal(){
   const [desc,setDesc] = useState('');
   const [projectId, setProjectId] = useState('');
   const [user, setUser] = useState(loadCurrentUser());
+  const navigate = useNavigate();
+  const [hardwareSets, setHardwareSets] = useState([]);
+  const [hwName, setHwName] = useState('');
+  const [hwCapacity, setHwCapacity] = useState(1);
+  const [hwDescription, setHwDescription] = useState('');
+  const [hwMessage, setHwMessage] = useState('');
+  const [hwError, setHwError] = useState(false);
+  const [hwCreating, setHwCreating] = useState(false);
   const [createMessage, setCreateMessage] = useState('');
   const [createError, setCreateError] = useState(false);
   const [portalMessage, setPortalMessage] = useState('');
   const [portalError, setPortalError] = useState(false);
   const [selectedOtherProject, setSelectedOtherProject] = useState('');
+  const [joinById, setJoinById] = useState('');
   const [creating,setCreating] = useState(false);
   const [joining,setJoining] = useState(''); // project id being joined
   const [leaving,setLeaving] = useState(''); // project id being left
+  const [rejoinCandidates, setRejoinCandidates] = useState([]);
 
   useEffect(()=>{
     setUser(loadCurrentUser());
     // fetch projects from backend
     fetchProjects();
+    fetchHardwareSets();
   },[]);
 
-  function fetchProjects(){
-    return fetch('/get_all_projects', { method: 'POST' })
+  // fetch projects the user is authorized for but not currently joined (candidates to rejoin)
+  useEffect(()=>{
+    const cur = loadCurrentUser();
+    if(!cur) { setRejoinCandidates([]); return; }
+    // Ask the server for rejoin candidates (efficient server-side filter)
+    fetch('/get_rejoin_candidates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: cur.username }) })
       .then(r=>r.json())
       .then(json=>{
         if(json && json.success && Array.isArray(json.data)){
-          const mapped = json.data.map(proj => ({
-            id: proj._id || proj.id,
-            name: proj.name,
-            description: proj.description,
-            authorized_users: proj.authorized_users || []
-          }));
-          setProjects(mapped);
+          setRejoinCandidates(json.data.map(p=>({ id: p.id, name: p.name })));
+        } else {
+          setRejoinCandidates([]);
+        }
+      })
+      .catch(err=>{ console.error('Fetch rejoin candidates failed', err); setRejoinCandidates([]); });
+  },[projects, user]);
+
+  function fetchHardwareSets(){
+    return fetch('/get_all_hw_names', { method: 'POST' })
+      .then(r=>r.json())
+      .then(async json=>{
+        if(json && json.success && Array.isArray(json.data)){
+          const names = json.data;
+          const hwPromises = names.map(n=> fetch('/get_hw_info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: n }) }).then(r=>r.json()).catch(()=>null));
+          const hwResults = await Promise.all(hwPromises);
+          const normalized = hwResults.filter(h => h && h.success && h.data).map(h => ({ hwName: h.data.hwName, capacity: h.data.capacity, availability: h.data.availability }));
+          setHardwareSets(normalized);
+        } else {
+          setHardwareSets([]);
+        }
+      })
+      .catch(err=>{
+        console.error('Fetch hardware error', err);
+        setHardwareSets([]);
+      });
+  }
+
+  function fetchProjects(){
+    const cur = loadCurrentUser();
+    if(!cur){ setProjects([]); return Promise.resolve(); }
+    return fetch('/get_user_projects_list', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username: cur.username }) })
+      .then(r=>r.json())
+      .then(json=>{
+        if(json && json.success && Array.isArray(json.data)){
+          const ids = json.data;
+          if(ids.length===0){ setProjects([]); return; }
+          return Promise.all(ids.map(pid => fetch('/get_project_info', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ project_id: pid }) }).then(r=>r.json()).then(j=>j && j.success ? j.data.project : null).catch(()=>null) ))
+            .then(arr=>{
+              const mapped = arr.filter(Boolean).map(proj => ({ id: proj._id || proj.id, name: proj.name, description: proj.description, authorized_users: proj.authorized_users || [] }));
+              setProjects(mapped);
+            });
         } else {
           setProjects([]);
         }
@@ -113,6 +164,36 @@ export default function MyUserPortal(){
     });
   };
 
+  const createHardwareSet = (e)=>{
+    e.preventDefault();
+    setHwMessage(''); setHwError(false);
+    if(!hwName){ setHwMessage('Please enter a hardware name'); setHwError(true); return; }
+    try{ setHwCapacity(Number(hwCapacity)); }catch(e){}
+    if(!Number.isInteger(Number(hwCapacity)) || Number(hwCapacity) <= 0){ setHwMessage('Capacity must be a positive integer'); setHwError(true); return; }
+    setHwCreating(true);
+    fetch('/create_hardware_set', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ hwName, capacity: Number(hwCapacity) }) })
+      .then(async r=>{
+        const json = await r.json().catch(()=>null);
+        if(!r.ok){
+          setHwMessage(json && json.message ? json.message : 'Create hardware failed'); setHwError(true); setHwCreating(false); return;
+        }
+        if(json && json.success && json.data){
+          setHwMessage('Hardware set created'); setHwError(false);
+          // refresh list
+          fetchHardwareSets();
+          setHwName(''); setHwCapacity(1); setHwDescription('');
+          setTimeout(()=>setHwMessage(''), 3000);
+        } else {
+          setHwMessage(json && json.message ? json.message : 'Create hardware failed'); setHwError(true);
+        }
+        setHwCreating(false);
+      })
+      .catch(err=>{
+        console.error('Create hardware error', err);
+        setHwMessage('Network error'); setHwError(true); setHwCreating(false);
+      });
+  };
+
   const join = (projectId)=>{
     const cur = loadCurrentUser();
     if(!cur){ setPortalMessage('Please login'); setPortalError(true); return; }
@@ -175,13 +256,22 @@ export default function MyUserPortal(){
     });
   };
 
-  // split projects into joined and others
-  const joinedProjects = projects.filter(p => user && p.authorized_users && user.username && p.authorized_users.includes(user.username));
-  const otherProjects = projects.filter(p => !(user && p.authorized_users && user.username && p.authorized_users.includes(user.username)));
+  // projects returned by server are the user's joined projects
+  const joinedProjects = projects;
 
   return (
     <div>
       <h2>Your Portal</h2>
+      {/* Small dropdown for projects the user can rejoin (authorized but currently not in) */}
+      <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:12}}>
+        <label style={{marginRight:6}}>Rejoin available:</label>
+        <select onChange={e=>{ const v=e.target.value; if(v){ join(v); e.target.value=''; } }} defaultValue="">
+          <option value="">-- select to rejoin --</option>
+          {rejoinCandidates.map(p=> (
+            <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+          ))}
+        </select>
+      </div>
 
       <section className="card" style={{marginBottom:12}}>
         <h3>Create Project</h3>
@@ -196,8 +286,8 @@ export default function MyUserPortal(){
             <input value={name} onChange={e=>setName(e.target.value)} />
           </div>
           <div className="form-row">
-            <label>Project ID (optional)</label>
-            <input value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="custom-project-id (no spaces)" />
+            <label>Project ID</label>
+            <input value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="project-id (no spaces)" />
           </div>
           <div className="form-row">
             <label>Description</label>
@@ -209,6 +299,34 @@ export default function MyUserPortal(){
             </button>
           </div>
         </form>
+      </section>
+
+      <section style={{marginTop:18}}>
+        <h3>Hardware Sets (Global)</h3>
+        {hwMessage && (
+          <div style={{padding:8, marginBottom:8, borderRadius:4, backgroundColor: hwError ? '#f8d7da' : '#d4edda', color: hwError ? '#721c24' : '#155724', border: '1px solid', borderColor: hwError ? '#f5c6cb' : '#c3e6cb'}}>
+            {hwMessage}
+          </div>
+        )}
+        <div className="card" style={{padding:12, marginBottom:12}}>
+          <div style={{display:'flex', flexWrap:'wrap', gap:12}}>
+            {hardwareSets.length===0 ? <div>No hardware sets</div> : hardwareSets.map(h=> (
+              <div key={h.hwName} className="card" style={{padding:8, minWidth:160}}>
+                <strong>{h.hwName}</strong>
+                <div>Available: {h.availability} / {h.capacity}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card" style={{padding:12}}>
+          <h4>Create Hardware Set</h4>
+          <form onSubmit={createHardwareSet} style={{display:'flex', gap:8, alignItems:'center'}}>
+            <input placeholder="Name" value={hwName} onChange={e=>setHwName(e.target.value)} />
+            <input type="number" style={{width:100}} value={hwCapacity} onChange={e=>setHwCapacity(e.target.value)} />
+            <button className="btn btn-primary" type="submit" disabled={hwCreating}>{hwCreating ? 'Creating...' : 'Create'}</button>
+          </form>
+        </div>
       </section>
 
       <section>
@@ -228,32 +346,23 @@ export default function MyUserPortal(){
       </section>
 
       <section style={{marginTop:18}}>
-        <h3>Other Available Projects</h3>
+        <h3>Join a Project</h3>
         {portalMessage && (
           <div style={{padding:8, marginBottom:8, borderRadius:4, backgroundColor: portalError ? '#f8d7da' : '#d4edda', color: portalError ? '#721c24' : '#155724', border: '1px solid', borderColor: portalError ? '#f5c6cb' : '#c3e6cb'}}>
             {portalMessage}
           </div>
         )}
         <div className="card" style={{padding:12}}>
-          {otherProjects.length===0 ? (
-            <div>No other projects available.</div>
-          ) : (
-            <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              <select value={selectedOtherProject} onChange={e=>setSelectedOtherProject(e.target.value)}>
-                <option value="">-- select a project --</option>
-                {otherProjects.map(p=> (
-                  <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
-                ))}
-              </select>
-              <button className="btn btn-primary" onClick={()=>{
-                if(!selectedOtherProject){ setPortalMessage('Please select a project'); setPortalError(true); return; }
-                join(selectedOtherProject);
-                setSelectedOtherProject('');
-              }} disabled={!!joining}>
-                {joining ? 'Joining...' : 'Join'}
-              </button>
-            </div>
-          )}
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <input placeholder="Enter project id to join" value={joinById} onChange={e=>setJoinById(e.target.value)} />
+            <button className="btn btn-primary" onClick={()=>{
+              if(!joinById){ setPortalMessage('Please enter a project id'); setPortalError(true); return; }
+              join(joinById.trim());
+              setJoinById('');
+            }} disabled={!!joining}>
+              {joining ? 'Joining...' : 'Join by ID'}
+            </button>
+          </div>
         </div>
       </section>
     </div>
