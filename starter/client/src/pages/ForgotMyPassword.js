@@ -1,5 +1,6 @@
 
 import React, {useState} from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 
 const CHAR_MIN = 34;
 const CHAR_MAX = 126;
@@ -81,25 +82,19 @@ export default function ForgotMyPassword(){
     e.preventDefault();
     if(!user){ setMessage('No user selected'); return; }
     setMessage('');
-    // send encrypted answer
-    const encryptedAnswer = encrypt(answer, 5, 1);
+    // send plaintext answer (no client-side encryption for security question)
     fetch('/forgot/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user.username, answer: encryptedAnswer })
+      body: JSON.stringify({ username: user.username, answer })
     })
     .then(async r=>r.json())
     .then(json=>{
       if(json && json.success){
         // server may return the plaintext password or indicate success differently
         if(json.data && json.data.password){
-          try{
-            const decrypted = decrypt(json.data.password, 5, 1);
-            setMessage('Your password is: ' + decrypted);
-          }catch(err){
-            // if decryption fails, fall back to raw value
-            setMessage('Your password is: ' + json.data.password);
-          }
+          // server returns the password (plaintext); display as-is
+          setMessage('Your password is: ' + decrypt(json.data.password, 5, 1));
         } else {
           setMessage(json.message || 'Verification succeeded');
         }
@@ -118,13 +113,15 @@ export default function ForgotMyPassword(){
     if(!user) { setMessage('No user selected'); return; }
     if(!newPassword) { setMessage('Please provide a new password'); return; }
     setMessage('');
-    // send encrypted answer and encrypted new password
-    const encryptedAnswer = encrypt(answer, 5, 1);
-    const encryptedNew = encrypt(newPassword, 5, 1);
+    // send plaintext answer but encrypt the new password before sending
+    let encryptedNew = newPassword;
+    try{
+      encryptedNew = encrypt(newPassword, 5, 1);
+    }catch(e){ /* fallback to plaintext if encryption fails */ }
     fetch('/forgot/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: user.username, answer: encryptedAnswer, newPassword: encryptedNew })
+      body: JSON.stringify({ username: user.username, answer, newPassword: encryptedNew })
     })
     .then(r=>r.json())
     .then(json=>{
@@ -140,6 +137,12 @@ export default function ForgotMyPassword(){
       console.error('Reset error', err);
       setMessage('Network error');
     });
+  };
+
+  const navigate = useNavigate();
+  const logout = ()=>{
+    localStorage.removeItem('currentUser');
+    navigate('/login');
   };
 
   return (

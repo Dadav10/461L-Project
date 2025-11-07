@@ -61,10 +61,9 @@ function decrypt(encryptedText, N, D) {
       return;
     }
   // Send registration to backend. Backend should handle encryption and storage.
-  // encrypt password and security answer before sending
+  // encrypt password before sending; send security answer plaintext per app policy
   const encryptedPassword = encrypt(password, 5, 1);
-  const encryptedAnswer = encrypt(securityAnswer, 5, 1);
-  const payload = { username, password: encryptedPassword, securityQuestion, securityAnswer: encryptedAnswer };
+  const payload = { username, password: encryptedPassword, securityQuestion, securityAnswer };
   setSubmitting(true);
   fetch('/register', {
     method: 'POST',
@@ -75,8 +74,13 @@ function decrypt(encryptedText, N, D) {
   .then(json=>{
     setSubmitting(false);
     if(json && json.success){
-  // persist minimal currentUser (username only)
+  // persist minimal currentUser (username + encrypted user_id)
   const cur = { username };
+  if(json.data && json.data.user_id){
+    try{
+      cur.encryptedUserId = encrypt(String(json.data.user_id), 5, 1);
+    }catch(e){ /* ignore encryption errors */ }
+  }
   localStorage.setItem('currentUser', JSON.stringify(cur));
       navigate('/portal');
     } else {
