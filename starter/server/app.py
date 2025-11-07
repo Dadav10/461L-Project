@@ -10,7 +10,7 @@ import time
 MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/Team_Project?retryWrites=true&w=majority&appName=ECE461L"
 
 # Initialize a new Flask web application
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../client/build/static', static_url_path='/static')
 app.config["MONGO_URI"] = MONGODB_SERVER
 mongo = PyMongo()
 mongo.init_app(app)
@@ -552,6 +552,20 @@ def check_inventory():
     return jsonify({})
 
 import os
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('../client/build/static', path)
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    build_dir = os.path.join(os.path.dirname(__file__), '../client/build')
+    if path != "" and os.path.exists(os.path.join(build_dir, path)):
+        return send_from_directory(build_dir, path)
+    else:
+        return send_from_directory(build_dir, 'index.html')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # Use Heroku's port or default to 5000
