@@ -100,7 +100,6 @@ All endpoints are implemented in `starter/server/app.py` — check that file for
 - POST /get_project_info — returns the project document and aggregate `usage` mapping (hwName -> amount).
 - POST /get_all_hw_names — list all hardware set names.
 - POST /get_hw_info — return capacity and availability for a hardware set.
-- POST /create_hardware_set — create a new global hardware set (hwName, capacity).
 - POST /check_out — check out hardware: decrement `hardware_sets.availability` and increment `projects.usage[hwName]`.
 - POST /check_in — check in hardware: decrement `projects.usage[hwName]` and increment `hardware_sets.availability`. Any authorized project member may check in; per-user ownership is not tracked.
 

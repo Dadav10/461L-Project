@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import {useState} from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
 const CHAR_MIN = 34;
@@ -28,10 +28,6 @@ function encrypt(inputText, N, D) {
         String.fromCharCode(CHAR_MIN + ((ch.charCodeAt(0) - CHAR_MIN + shift) % RING_LEN))
     ).join('');
 }
-
-// NOTE: localStorage removed. Authentication is delegated to backend API.
-// Expected backend endpoint: POST /api/login with JSON { username, password }
-// Response shape expected: { success: boolean, message?: string }
 
 export default function MyLoginPage(){
   const [username,setUsername]=useState('');

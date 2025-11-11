@@ -1,7 +1,5 @@
-import React, {useEffect, useState} from 'react';
+import {useEffect, useState} from 'react';
 import { useParams } from 'react-router-dom';
-// Use backend endpoints instead of local storage
-// (project and hardware will be fetched from server)
 
 export default function ProjectDetails(){
   const { id } = useParams();

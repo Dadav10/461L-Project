@@ -1,11 +1,8 @@
-import React, {useEffect, useState} from 'react';
-import { loadHardware, saveHardware, createHardware } from '../lib/storage';
+import {useEffect, useState} from 'react';
+import { loadHardware, saveHardware } from '../lib/storage';
 
 export default function HardwareList(){
   const [hardware, setHardware] = useState([]);
-  const [name,setName] = useState('');
-  const [capacity,setCapacity] = useState(1);
-  const [description,setDescription] = useState('');
 
   useEffect(()=>{
     // Try to load hardware from server first; fall back to localStorage
@@ -31,29 +28,6 @@ export default function HardwareList(){
     loadFromServer();
   },[]);
 
-  const add = (e)=>{
-    e.preventDefault();
-    if(!name) return;
-    // ask server to create global hardware set; fall back to localStorage helper if server unavailable
-    fetch('/create_hardware_set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hwName: name, capacity }) })
-      .then(r=>r.json())
-      .then(json=>{
-        if(json && json.success && json.data){
-          const h = { id: json.data.hwName, name: json.data.hwName, capacity: json.data.capacity, available: json.data.availability, description };
-          setHardware(prev => [...prev, h]);
-        } else {
-          // fallback to local creation
-          const entry = createHardware(name, capacity, description);
-          setHardware(prev => [...prev, { id: entry.id, name: entry.name, capacity: entry.capacity, available: entry.available, description: entry.description }]);
-        }
-      })
-      .catch(()=>{
-        const entry = createHardware(name, capacity, description);
-        setHardware(prev => [...prev, { id: entry.id, name: entry.name, capacity: entry.capacity, available: entry.available, description: entry.description }]);
-      })
-      .finally(()=>{ setName(''); setCapacity(1); setDescription(''); });
-  };
-
   return (
     <div>
       <h2>Hardware Inventory</h2>
@@ -66,27 +40,6 @@ export default function HardwareList(){
           </div>
         ))}
         {hardware.length===0 && <div className="card">No hardware sets</div>}
-      </div>
-
-      <div className="card" style={{marginTop:12}}>
-        <h3>Create Hardware Set</h3>
-        <form onSubmit={add}>
-          <div className="form-row">
-            <label>Name</label>
-            <input className="input-medium" value={name} onChange={e=>setName(e.target.value)} />
-          </div>
-          <div className="form-row">
-            <label>Capacity</label>
-            <input className="input-medium" type="number" value={capacity} onChange={e=>setCapacity(Number(e.target.value))} />
-          </div>
-          <div className="form-row">
-            <label>Description</label>
-            <input className="input-medium" value={description} onChange={e=>setDescription(e.target.value)} />
-          </div>
-          <div>
-            <button type="submit">Create Hardware</button>
-          </div>
-        </form>
       </div>
     </div>
   )

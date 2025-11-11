@@ -512,45 +512,6 @@ def check_in():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# Route for creating a new hardware set
-@app.route('/create_hardware_set', methods=['POST'])
-def create_hardware_set():
-    data = request.json or {}
-    hwName = data.get('hwName')
-    capacity = data.get('capacity')
-    if not hwName or capacity is None:
-        return jsonify({"success": False, "message": "hwName and capacity required"}), 400
-    try:
-        capacity = int(capacity)
-        if capacity <= 0:
-            raise ValueError()
-    except Exception:
-        return jsonify({"success": False, "message": "capacity must be a positive integer"}), 400
-
-    # Check if hardware set already exists
-    existing = mongo.db.hardware_sets.find_one({"hwName": hwName})
-    if existing:
-        return jsonify({"success": False, "message": "Hardware set already exists"}), 409
-
-    hw_doc = {"hwName": hwName, "capacity": capacity, "availability": capacity}
-    try:
-        mongo.db.hardware_sets.insert_one(hw_doc)
-        return jsonify({"success": True, "data": {"hwName": hwName, "capacity": capacity, "availability": capacity}}), 201
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
-
-# Route for checking the inventory of projects
-@app.route('/api/inventory', methods=['GET'])
-def check_inventory():
-    # Connect to MongoDB
-
-    # Fetch all projects from the HardwareCheckout.Projects collection
-
-    # Close the MongoDB connection
-
-    # Return a JSON response
-    return jsonify({})
-
 import os
 
 if __name__ == '__main__':

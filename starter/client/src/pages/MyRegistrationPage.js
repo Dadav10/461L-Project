@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import {useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function MyRegistrationPage(){
@@ -36,17 +36,6 @@ function encrypt(inputText, N, D) {
     return [...rev].map(ch => 
         String.fromCharCode(CHAR_MIN + ((ch.charCodeAt(0) - CHAR_MIN + shift) % RING_LEN))
     ).join('');
-}
-
-function decrypt(encryptedText, N, D) {
-    if (!validInputs(encryptedText, N, D)) {
-        throw new Error("Invalid input to decrypt");
-    }
-    const shift = -D * N;
-    const unshifted = [...encryptedText].map(ch => 
-        String.fromCharCode(CHAR_MIN + ((ch.charCodeAt(0) - CHAR_MIN + shift) % RING_LEN))
-    ).join('');
-    return [...unshifted].reverse().join('');
 }
 
   const submit = (e)=>{
@@ -127,7 +116,5 @@ function decrypt(encryptedText, N, D) {
         </div>
       </form>
     </div>
-    
-    
   )
 }

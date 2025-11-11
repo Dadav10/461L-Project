@@ -82,16 +82,6 @@ export function returnHardware(projectId, hwId, amount){
   saveHardware(hardware);
   return true;
 }
-
-export function createHardware(name, capacity, description){
-  const hw = loadHardware();
-  const id = 'hw_' + Math.random().toString(36).slice(2,9);
-  const entry = {id, name, capacity: Number(capacity), available: Number(capacity), description};
-  hw.push(entry);
-  saveHardware(hw);
-  return entry;
-}
-
 export function createProject(name, description){
   const projects = loadProjects();
   const id = 'p_' + Math.random().toString(36).slice(2,9);

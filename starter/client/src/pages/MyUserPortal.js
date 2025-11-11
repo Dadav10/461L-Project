@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import {useState, useEffect} from 'react';
 import { useNavigate } from 'react-router-dom';
 import Project from '../components/Project';
 
@@ -25,12 +25,7 @@ export default function MyUserPortal(){
   const [user, setUser] = useState(loadCurrentUser());
   const navigate = useNavigate();
   const [hardwareSets, setHardwareSets] = useState([]);
-  const [hwName, setHwName] = useState('');
-  const [hwCapacity, setHwCapacity] = useState(1);
-  const [hwDescription, setHwDescription] = useState('');
-  const [hwMessage, setHwMessage] = useState('');
-  const [hwError, setHwError] = useState(false);
-  const [hwCreating, setHwCreating] = useState(false);
+  // Hardware create functionality removed: only display existing global hardware sets
   const [createMessage, setCreateMessage] = useState('');
   const [createError, setCreateError] = useState(false);
   const [portalMessage, setPortalMessage] = useState('');
@@ -164,36 +159,6 @@ export default function MyUserPortal(){
     });
   };
 
-  const createHardwareSet = (e)=>{
-    e.preventDefault();
-    setHwMessage(''); setHwError(false);
-    if(!hwName){ setHwMessage('Please enter a hardware name'); setHwError(true); return; }
-    try{ setHwCapacity(Number(hwCapacity)); }catch(e){}
-    if(!Number.isInteger(Number(hwCapacity)) || Number(hwCapacity) <= 0){ setHwMessage('Capacity must be a positive integer'); setHwError(true); return; }
-    setHwCreating(true);
-    fetch('/create_hardware_set', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ hwName, capacity: Number(hwCapacity) }) })
-      .then(async r=>{
-        const json = await r.json().catch(()=>null);
-        if(!r.ok){
-          setHwMessage(json && json.message ? json.message : 'Create hardware failed'); setHwError(true); setHwCreating(false); return;
-        }
-        if(json && json.success && json.data){
-          setHwMessage('Hardware set created'); setHwError(false);
-          // refresh list
-          fetchHardwareSets();
-          setHwName(''); setHwCapacity(1); setHwDescription('');
-          setTimeout(()=>setHwMessage(''), 3000);
-        } else {
-          setHwMessage(json && json.message ? json.message : 'Create hardware failed'); setHwError(true);
-        }
-        setHwCreating(false);
-      })
-      .catch(err=>{
-        console.error('Create hardware error', err);
-        setHwMessage('Network error'); setHwError(true); setHwCreating(false);
-      });
-  };
-
   const join = (projectId)=>{
     const cur = loadCurrentUser();
     if(!cur){ setPortalMessage('Please login'); setPortalError(true); return; }
@@ -303,11 +268,6 @@ export default function MyUserPortal(){
 
       <section style={{marginTop:18}}>
         <h3>Hardware Sets (Global)</h3>
-        {hwMessage && (
-          <div style={{padding:8, marginBottom:8, borderRadius:4, backgroundColor: hwError ? '#f8d7da' : '#d4edda', color: hwError ? '#721c24' : '#155724', border: '1px solid', borderColor: hwError ? '#f5c6cb' : '#c3e6cb'}}>
-            {hwMessage}
-          </div>
-        )}
         <div className="card" style={{padding:12, marginBottom:12}}>
           <div style={{display:'flex', flexWrap:'wrap', gap:12}}>
             {hardwareSets.length===0 ? <div>No hardware sets</div> : hardwareSets.map(h=> (
@@ -317,15 +277,6 @@ export default function MyUserPortal(){
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="card" style={{padding:12}}>
-          <h4>Create Hardware Set</h4>
-          <form onSubmit={createHardwareSet} style={{display:'flex', gap:8, alignItems:'center'}}>
-            <input placeholder="Name" value={hwName} onChange={e=>setHwName(e.target.value)} />
-            <input type="number" style={{width:100}} value={hwCapacity} onChange={e=>setHwCapacity(e.target.value)} />
-            <button className="btn btn-primary" type="submit" disabled={hwCreating}>{hwCreating ? 'Creating...' : 'Create'}</button>
-          </form>
         </div>
       </section>
 
