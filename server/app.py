@@ -16,7 +16,7 @@ mongo = PyMongo()
 mongo.init_app(app)
 CORS(app)
 
-@app.route('/')
+@app.route('/', methods=['POST', 'GET'])
 def index():
     return app.send_static_file('index.html')
 
