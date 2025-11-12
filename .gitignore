@@ -1,3 +1,3 @@
 .env
 __pycache__/
-starter/client/node_modules/
+client/node_modules/

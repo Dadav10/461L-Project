@@ -16,6 +16,11 @@ mongo = PyMongo()
 mongo.init_app(app)
 CORS(app)
 
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
+
+
 # Warm up MongoDB connection in background to reduce first-request latency
 def warmup_mongo(retries=3, delay=1.0):
     """Attempt to ping MongoDB a few times in background. Non-blocking."""
@@ -513,10 +518,6 @@ def check_in():
         return jsonify({"success": False, "message": str(e)}), 500
 
 import os
-
-@app.route('/')
-def index():
-    return app.send_static_file('index.html')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 80))  # Use Heroku's port or default to 5000
