@@ -10,7 +10,7 @@ import time
 MONGODB_SERVER = "mongodb+srv://teamthree:friday@ece461l.38dktsx.mongodb.net/Team_Project?retryWrites=true&w=majority&appName=ECE461L"
 
 # Initialize a new Flask web application
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../client/build', static_url_path='/')
 app.config["MONGO_URI"] = MONGODB_SERVER
 mongo = PyMongo()
 mongo.init_app(app)
@@ -514,7 +514,11 @@ def check_in():
 
 import os
 
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # Use Heroku's port or default to 5000
+    port = int(os.environ.get('PORT', 80))  # Use Heroku's port or default to 5000
     app.run(host='0.0.0.0', port=port)
 
